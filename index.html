@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "Segoe UI", "Noto Sans Thai", Tahoma, sans-serif; background: #f1f5f9; color: #0f172a; font-size: 17px; }
+  header { background: #b91c1c; color: #fff; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 5; }
+  header h1 { font-size: 18px; margin: 0; }
+  header .who { font-size: 14px; opacity: .95; }
+  header .who a { color: #fff; margin-left: 6px; }
+  main { padding: 12px; max-width: 520px; margin: 0 auto; }
+  .card { background: #fff; border-radius: 12px; padding: 14px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .card h2 { font-size: 15px; margin: 0 0 10px; color: #475569; font-weight: 600; }
+  label { display: block; font-size: 14px; color: #475569; margin: 8px 0 4px; }
+  input { width: 100%; font-size: 20px; padding: 12px; border: 2px solid #cbd5e1; border-radius: 10px; outline: none; }
+  input:focus { border-color: #b91c1c; }
+  .row { display: flex; gap: 8px; }
+  .row > * { flex: 1; }
+  .row > .narrow { flex: 0 0 auto; }
+  button { font-size: 17px; padding: 12px 14px; border-radius: 10px; border: none; cursor: pointer; font-family: inherit; }
+  .btn-main { background: #b91c1c; color: #fff; width: 100%; font-size: 19px; padding: 14px; margin-top: 12px; }
+  .btn-main:disabled { background: #94a3b8; }
+  .btn-sec { background: #e2e8f0; color: #0f172a; }
+  .btn-scan { background: #0f172a; color: #fff; white-space: nowrap; }
+  .btn-ghost { background: none; color: #b91c1c; padding: 6px; font-size: 15px; }
+  .loc-big { font-size: 34px; font-weight: 800; letter-spacing: 1px; text-align: center; padding: 6px 0 10px; font-family: ui-monospace, Menlo, Consolas, monospace; }
+  .itemname { min-height: 24px; margin-top: 6px; font-size: 16px; }
+  .itemname.ok { color: #15803d; font-weight: 600; }
+  .itemname.warn { color: #b45309; font-weight: 600; }
+  .list { margin: 0; padding: 0; list-style: none; }
+  .list li { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #e2e8f0; gap: 8px; }
+  .list li:last-child { border-bottom: none; }
+  .list .code { font-weight: 700; font-family: ui-monospace, Menlo, Consolas, monospace; }
+  .list .nm { font-size: 14px; color: #475569; }
+  .list .qty { font-size: 22px; font-weight: 800; min-width: 50px; text-align: right; }
+  .list .del { background: #fee2e2; color: #b91c1c; padding: 6px 10px; font-size: 14px; }
+  .muted { color: #64748b; font-size: 14px; }
+  .hidden { display: none !important; }
+  #toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: #0f172a; color: #fff; padding: 12px 18px; border-radius: 10px; font-size: 16px; z-index: 50; max-width: 90%; text-align: center; transition: opacity .2s; opacity: 0; pointer-events: none; }
+  #toast.show { opacity: 1; }
+  #toast.err { background: #b91c1c; }
+  #toast.good { background: #15803d; }
+  .modal { position: fixed; inset: 0; background: rgba(15,23,42,.7); z-index: 40; display: flex; align-items: center; justify-content: center; padding: 16px; }
+  .modal .box { background: #fff; border-radius: 14px; padding: 16px; width: 100%; max-width: 460px; }
+  .modal h3 { margin: 0 0 10px; font-size: 18px; }
+  #reader { width: 100%; min-height: 260px; background: #000; border-radius: 10px; overflow: hidden; }
+  .stack > button { width: 100%; margin-top: 8px; }
+  .busy { opacity: .6; pointer-events: none; }
+  .ver { text-align: center; color: #94a3b8; font-size: 12px; margin: 16px 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>นับสต๊อก</h1>
+  <div class="who" id="whoBox"></div>
+</header>
+
+<main>
+  <!-- เข้าสู่ระบบ -->
+  <section id="loginView" class="card hidden">
+    <h2>เข้าใช้งาน</h2>
+    <label>ชื่อผู้นับ</label>
+    <input id="inWho" placeholder="เช่น สมชาย" autocomplete="off">
+    <label>PIN</label>
+    <input id="inPin" type="password" inputmode="numeric" placeholder="รหัส PIN ของร้าน">
+    <button class="btn-main" id="btnLogin">เริ่มนับ</button>
+  </section>
+
+  <section id="appView" class="hidden">
+    <!-- ตำแหน่ง -->
+    <div class="card">
+      <h2>① ตำแหน่ง (ช่อง)</h2>
+      <div id="locPick">
+        <div class="row">
+          <input id="inLoc" placeholder="เช่น 1-C1-1-01" autocomplete="off" autocapitalize="characters">
+          <button class="btn-scan narrow" id="btnScanLoc">📷 สแกน</button>
+        </div>
+        <button class="btn-main" id="btnSetLoc">ตกลง</button>
+      </div>
+      <div id="locShow" class="hidden">
+        <div class="loc-big" id="locBig"></div>
+        <div class="row">
+          <button class="btn-sec" id="btnPrev">◀ ก่อน</button>
+          <button class="btn-sec" id="btnChange">เปลี่ยน</button>
+          <button class="btn-sec" id="btnNext">ถัดไป ▶</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- สินค้า -->
+    <div class="card" id="itemCard">
+      <h2>② สินค้าในช่องนี้</h2>
+      <label>รหัสสินค้า / บาร์โค้ด</label>
+      <div class="row">
+        <input id="inCode" placeholder="สแกนหรือพิมพ์รหัส" autocomplete="off" autocapitalize="characters">
+        <button class="btn-scan narrow" id="btnScanCode">📷 สแกน</button>
+      </div>
+      <div class="itemname" id="itemName"></div>
+      <label>จำนวนที่นับได้ (ชิ้น)</label>
+      <input id="inQty" type="number" inputmode="numeric" min="0" step="1" placeholder="0">
+      <button class="btn-main" id="btnSave">บันทึก</button>
+      <button class="btn-ghost" id="btnEmpty" style="margin-top:8px">ช่องนี้ไม่มีสินค้า</button>
+    </div>
+
+    <!-- รายการในช่อง -->
+    <div class="card">
+      <h2>นับแล้วในช่องนี้ <span id="cnt" class="muted"></span></h2>
+      <ul class="list" id="list"></ul>
+      <div class="muted" id="listEmpty">ยังไม่มีรายการ</div>
+    </div>
+  </section>
+  <div class="ver" id="ver"></div>
+</main>
+
+<!-- สแกนกล้อง -->
+<div class="modal hidden" id="scanModal">
+  <div class="box">
+    <h3 id="scanTitle">สแกน</h3>
+    <div id="reader"></div>
+    <div class="muted" id="scanHint" style="margin-top:8px">เล็งกล้องไปที่ QR / บาร์โค้ด</div>
+    <button class="btn-sec" id="btnScanCancel" style="width:100%;margin-top:10px">ปิดกล้อง</button>
+  </div>
+</div>
+
+<!-- ถามเมื่อรหัสซ้ำ -->
+<div class="modal hidden" id="dupModal">
+  <div class="box">
+    <h3>รหัสนี้นับไว้แล้วในช่องนี้</h3>
+    <div id="dupText" style="margin-bottom:6px"></div>
+    <div class="stack">
+      <button class="btn-main" id="dupAdd" style="margin-top:4px">บวกเพิ่ม</button>
+      <button class="btn-sec" id="dupReplace">แทนที่ยอดเดิม</button>
+      <button class="btn-ghost" id="dupCancel">ยกเลิก</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+var S = { who: '', pin: '', loc: '', item: null, list: [], pending: null };
+var $ = function (id) { return document.getElementById(id); };
+
+/* ---------- เก็บชื่อ/PIN ไว้ในเครื่อง ---------- */
+function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; } }
+
+/* ---------- เรียกฝั่ง Google Sheet ---------- */
+// ▼▼▼ วางลิงก์เว็บแอป Apps Script (ลงท้ายด้วย /exec) ระหว่างเครื่องหมาย ' ' ▼▼▼
+var API_URL = 'https://script.google.com/macros/s/AKfycbzVxl0FE--ZP61y2h15uy389Wcpx3gn3g4ujSJKnZwq0ry82_tEMPEod18tmt6AdQbeTA/exec';
+// ▲▲▲
+
+function call(fn) {
+  var args = Array.prototype.slice.call(arguments, 1);
+  if (!/^https:\/\/script\.google\.com\/.+\/exec$/.test(API_URL)) return Promise.reject(new Error('ยังไม่ได้ใส่ลิงก์ Apps Script ในไฟล์ index.html (API_URL)'));
+  return fetch(API_URL, {
+    method: 'POST', redirect: 'follow',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ fn: fn, args: args })
+  }).then(function (r) {
+    if (!r.ok) throw new Error('เชื่อมต่อไม่สำเร็จ (' + r.status + ')');
+    return r.json();
+  }).then(function (j) {
+    if (!j.ok) throw new Error(j.error);
+    return j.data;
+  }, function (e) {
+    throw new Error(e && e.message === 'Failed to fetch' ? 'เชื่อมต่อไม่ได้ ตรวจสอบอินเทอร์เน็ต หรือลิงก์ API_URL' : (e.message || String(e)));
+  });
+}
+
+function toast(msg, kind) {
+  var t = $('toast');
+  t.textContent = msg; t.className = 'show ' + (kind || '');
+  clearTimeout(toast._t); toast._t = setTimeout(function () { t.className = ''; }, kind === 'err' ? 3500 : 1800);
+}
+function buzz(ms) { try { navigator.vibrate && navigator.vibrate(ms || 60); } catch (e) {} }
+function busy(on) { document.body.classList.toggle('busy', !!on); }
+function errMsg(e) { return (e && e.message ? e.message : String(e)).replace(/^Exception:\s*/, ''); }
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+
+/* ---------- เข้าสู่ระบบ ---------- */
+function showLogin() {
+  $('loginView').classList.remove('hidden'); $('appView').classList.add('hidden');
+  $('inWho').value = store('sc_who') || ''; $('inPin').value = '';
+  $('whoBox').innerHTML = '';
+  setTimeout(function () { ($('inWho').value ? $('inPin') : $('inWho')).focus(); }, 50);
+}
+function doLogin(who, pin, silent) {
+  busy(true);
+  return call('login', pin).then(function (r) {
+    S.who = who; S.pin = pin;
+    store('sc_who', who); store('sc_pin', pin);
+    $('ver').textContent = 'เวอร์ชัน ' + r.version + ' · สินค้าในระบบ ' + Number(r.items).toLocaleString() + ' รายการ';
+    $('whoBox').innerHTML = 'ผู้นับ: <b>' + esc(who) + '</b><a href="#" id="lnkOut">เปลี่ยน</a>';
+    $('lnkOut').onclick = function (ev) { ev.preventDefault(); store('sc_pin', ''); showLogin(); };
+    $('loginView').classList.add('hidden'); $('appView').classList.remove('hidden');
+    var last = store('sc_loc');
+    if (last) setLoc(last); else showLocPick();
+  }).catch(function (e) {
+    if (silent) showLogin(); else toast(errMsg(e), 'err');
+  }).then(function () { busy(false); });
+}
+$('btnLogin').onclick = function () {
+  var who = $('inWho').value.trim();
+  if (!who) { toast('กรุณาใส่ชื่อผู้นับ', 'err'); return; }
+  doLogin(who, $('inPin').value.trim());
+};
+$('inPin').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('btnLogin').click(); });
+
+/* ---------- ตำแหน่ง ---------- */
+function normLoc(s) { return String(s || '').trim().toUpperCase().replace(/\s+/g, ''); }
+function locLooksOk(s) { return /^\d-[A-Z0-9]+(-[A-Z0-9]+)+$/.test(s); }
+
+function showLocPick() {
+  S.loc = ''; store('sc_loc', '');
+  $('locPick').classList.remove('hidden'); $('locShow').classList.add('hidden');
+  $('itemCard').classList.add('hidden');
+  $('inLoc').value = ''; renderList([]);
+  setTimeout(function () { $('inLoc').focus(); }, 50);
+}
+function setLoc(raw) {
+  var loc = normLoc(raw);
+  if (!loc) { toast('กรุณาระบุตำแหน่ง', 'err'); return; }
+  if (!locLooksOk(loc) && !confirm('รูปแบบตำแหน่ง "' + loc + '" ไม่ตรงกับแบบที่ใช้ (เช่น 1-C1-1-01)\nยืนยันใช้ตำแหน่งนี้?')) return;
+  S.loc = loc; store('sc_loc', loc);
+  $('locBig').textContent = loc;
+  $('locPick').classList.add('hidden'); $('locShow').classList.remove('hidden');
+  $('itemCard').classList.remove('hidden');
+  clearItem();
+  loadList();
+}
+function loadList() {
+  var loc = S.loc;
+  $('list').innerHTML = '<li class="muted">กำลังโหลด…</li>'; $('listEmpty').classList.add('hidden');
+  call('getLocation', S.pin, loc).then(function (rows) { if (S.loc === loc) renderList(rows); })
+    .catch(function (e) { toast(errMsg(e), 'err'); renderList([]); });
+}
+/** ช่องก่อน/ถัดไป: เปลี่ยนเลขท้ายสุด โดยคงจำนวนหลักเดิม */
+function stepLoc(d) {
+  var m = S.loc.match(/^(.*?)(\d+)$/);
+  if (!m) { toast('ตำแหน่งนี้ไม่ได้ลงท้ายด้วยตัวเลข', 'err'); return; }
+  var n = parseInt(m[2], 10) + d;
+  if (n < 1) { toast('นี่คือช่องแรกแล้ว', 'err'); return; }
+  var s = String(n); while (s.length < m[2].length) s = '0' + s;
+  setLoc(m[1] + s);
+}
+$('btnSetLoc').onclick = function () { setLoc($('inLoc').value); };
+$('inLoc').addEventListener('keydown', function (e) { if (e.key === 'Enter') setLoc($('inLoc').value); });
+$('btnNext').onclick = function () { stepLoc(1); };
+$('btnPrev').onclick = function () { stepLoc(-1); };
+$('btnChange').onclick = showLocPick;
+
+/* ---------- สินค้า ---------- */
+function clearItem() {
+  S.item = null; $('inCode').value = ''; $('inQty').value = '';
+  $('itemName').textContent = ''; $('itemName').className = 'itemname';
+  setTimeout(function () { $('inCode').focus(); }, 50);
+}
+function lookup(code, thenFocusQty) {
+  code = String(code || '').trim().toUpperCase();
+  if (!code) return Promise.resolve(null);
+  $('inCode').value = code;
+  $('itemName').textContent = 'กำลังค้นหา…'; $('itemName').className = 'itemname';
+  return call('lookupItem', S.pin, code).then(function (it) {
+    if ($('inCode').value.trim().toUpperCase() !== code) return;
+    S.item = it ? it : { code: code, name: '' };
+    if (it) { $('itemName').textContent = '✓ ' + it.name; $('itemName').className = 'itemname ok'; }
+    else { $('itemName').textContent = '⚠ ไม่พบรหัสนี้ในชีตสินค้า (ยังบันทึกได้)'; $('itemName').className = 'itemname warn'; buzz([80, 60, 80]); }
+    if (thenFocusQty) $('inQty').focus();
+  }).catch(function (e) { $('itemName').textContent = ''; toast(errMsg(e), 'err'); });
+}
+$('inCode').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); lookup($('inCode').value, true); } });
+$('inCode').addEventListener('change', function () { lookup($('inCode').value, false); });
+$('inCode').addEventListener('input', function () { S.item = null; $('itemName').textContent = ''; $('itemName').className = 'itemname'; });
+$('inQty').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); $('btnSave').click(); } });
+
+function save(replace, qtyOverride) {
+  var code = $('inCode').value.trim().toUpperCase();
+  var qtyStr = qtyOverride != null ? String(qtyOverride) : $('inQty').value.trim();
+  if (!S.loc) { toast('ยังไม่ได้เลือกตำแหน่ง', 'err'); return; }
+  if (!code) { toast('กรุณาสแกนหรือพิมพ์รหัสสินค้า', 'err'); $('inCode').focus(); return; }
+  if (qtyStr === '' || !/^\d+$/.test(qtyStr)) { toast('กรุณาใส่จำนวนเป็นตัวเลข', 'err'); $('inQty').focus(); return; }
+  var qty = parseInt(qtyStr, 10);
+  var name = S.item && S.item.code === code ? S.item.name : '';
+  busy(true);
+  call('saveCount', S.pin, { who: S.who, loc: S.loc, code: code, name: name, qty: qty, replace: !!replace })
+    .then(function (r) {
+      if (r.dup) {
+        S.pending = { code: code, qty: qty, old: Number(r.dup.qty) };
+        $('dupText').innerHTML = '<b>' + esc(code) + '</b> ' + esc(r.dup.name || '') +
+          '<br>ยอดเดิม <b>' + esc(r.dup.qty) + '</b> ชิ้น (นับโดย ' + esc(r.dup.who) + ')<br>ยอดที่นับตอนนี้ <b>' + qty + '</b> ชิ้น';
+        $('dupAdd').textContent = 'บวกเพิ่ม → รวม ' + (S.pending.old + qty) + ' ชิ้น';
+        $('dupReplace').textContent = 'แทนที่ → เป็น ' + qty + ' ชิ้น';
+        $('dupModal').classList.remove('hidden');
+        return;
+      }
+      buzz(); toast('บันทึกแล้ว ' + code + ' = ' + qty + ' ชิ้น', 'good');
+      renderList(r.list); clearItem();
+    })
+    .catch(function (e) { toast(errMsg(e), 'err'); })
+    .then(function () { busy(false); });
+}
+$('btnSave').onclick = function () { save(false); };
+$('dupAdd').onclick = function () { $('dupModal').classList.add('hidden'); var p = S.pending; save(true, p.old + p.qty); };
+$('dupReplace').onclick = function () { $('dupModal').classList.add('hidden'); save(true, S.pending.qty); };
+$('dupCancel').onclick = function () { $('dupModal').classList.add('hidden'); };
+
+$('btnEmpty').onclick = function () {
+  if (S.list.some(function (r) { return r.code !== '(ช่องว่าง)'; }) &&
+      !confirm('ช่องนี้มีรายการที่นับไว้แล้ว ยืนยันว่าไม่มีสินค้า?')) return;
+  busy(true);
+  call('markEmpty', S.pin, S.who, S.loc).then(function (r) {
+    buzz(); toast('บันทึกว่า ' + S.loc + ' ไม่มีสินค้า', 'good'); renderList(r.list);
+  }).catch(function (e) { toast(errMsg(e), 'err'); }).then(function () { busy(false); });
+};
+
+function renderList(rows) {
+  S.list = rows || [];
+  var ul = $('list'); ul.innerHTML = '';
+  $('listEmpty').classList.toggle('hidden', S.list.length > 0);
+  var real = S.list.filter(function (r) { return r.code !== '(ช่องว่าง)'; });
+  $('cnt').textContent = real.length ? '(' + real.length + ' รายการ)' : '';
+  S.list.slice().reverse().forEach(function (r) {
+    var li = document.createElement('li');
+    li.innerHTML = '<div><div class="code">' + esc(r.code) + '</div><div class="nm">' + esc(r.name || '-') +
+      '</div><div class="muted" style="font-size:12px">' + esc(r.who) + ' · ' + esc(r.time) + '</div></div>' +
+      '<div class="qty">' + esc(r.qty) + '</div>';
+    var b = document.createElement('button'); b.className = 'del'; b.textContent = 'ลบ';
+    b.onclick = function () {
+      if (!confirm('ลบรายการ ' + r.code + ' (' + r.qty + ' ชิ้น)?')) return;
+      busy(true);
+      call('deleteCount', S.pin, r.id, S.loc).then(function (rows) { renderList(rows); toast('ลบแล้ว'); })
+        .catch(function (e) { toast(errMsg(e), 'err'); }).then(function () { busy(false); });
+    };
+    li.appendChild(b); ul.appendChild(li);
+  });
+}
+
+/* ---------- สแกนด้วยกล้อง ---------- */
+var scanner = null, scanTarget = null;
+function openScan(target) {
+  if (typeof Html5Qrcode === 'undefined') { toast('โหลดตัวสแกนไม่สำเร็จ ให้พิมพ์รหัสแทน', 'err'); return; }
+  scanTarget = target;
+  $('scanTitle').textContent = target === 'loc' ? 'สแกน QR ที่สติ๊กเกอร์ช่อง' : 'สแกนบาร์โค้ดสินค้า';
+  $('scanHint').textContent = 'เล็งกล้องไปที่ QR / บาร์โค้ด';
+  $('scanModal').classList.remove('hidden');
+  var F = Html5QrcodeSupportedFormats;
+  scanner = new Html5Qrcode('reader', {
+    formatsToSupport: [F.QR_CODE, F.CODE_128, F.CODE_39, F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.ITF, F.CODABAR],
+    experimentalFeatures: { useBarCodeDetectorIfSupported: true }, verbose: false
+  });
+  scanner.start({ facingMode: 'environment' }, { fps: 12, qrbox: function (w, h) { return { width: Math.floor(w * 0.85), height: Math.floor(Math.min(h, w) * 0.55) }; } },
+    function (text) { onScanned(text); }, function () {})
+    .catch(function (e) {
+      $('scanHint').textContent = 'เปิดกล้องไม่ได้: ' + errMsg(e) + ' — ลองเปิดหน้านี้ใน Chrome/Safari แล้วอนุญาตกล้อง หรือพิมพ์รหัสแทน';
+    });
+}
+function closeScan() {
+  $('scanModal').classList.add('hidden');
+  if (scanner) { var s = scanner; scanner = null; s.stop().catch(function () {}).then(function () { try { s.clear(); } catch (e) {} }); }
+}
+function onScanned(text) {
+  var t = scanTarget; closeScan(); buzz(80);
+  if (t === 'loc') setLoc(text);
+  else lookup(text, true);
+}
+$('btnScanLoc').onclick = function () { openScan('loc'); };
+$('btnScanCode').onclick = function () { openScan('code'); };
+$('btnScanCancel').onclick = closeScan;
+
+/* ---------- เริ่ม ---------- */
+(function init() {
+  var who = store('sc_who'), pin = store('sc_pin');
+  if (who && pin !== null && pin !== undefined && store('sc_pin') !== '') doLogin(who, pin, true);
+  else if (who) doLogin(who, '', true); // เผื่อร้านไม่ตั้ง PIN
+  else showLogin();
+})();
+</script>
+</body>
+</html>
