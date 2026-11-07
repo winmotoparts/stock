@@ -49,6 +49,17 @@
   #reader { width: 100%; min-height: 260px; background: #000; border-radius: 10px; overflow: hidden; }
   .stack > button { width: 100%; margin-top: 8px; }
   .busy { opacity: .6; pointer-events: none; }
+  .home { background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 10px 12px; margin-top: 10px; font-size: 15px; }
+  .home b.c { font-family: ui-monospace, Menlo, Consolas, monospace; }
+  .home .out { color: #b91c1c; font-weight: 700; }
+  .list .qty.zero { color: #b91c1c; font-size: 16px; }
+  .slot-item { border: 1px solid #e2e8f0; border-radius: 10px; padding: 10px 12px; margin-top: 8px; }
+  .slot-item .c { font-family: ui-monospace, Menlo, Consolas, monospace; font-weight: 800; font-size: 18px; }
+  .slot-item .q { font-size: 15px; margin-top: 4px; }
+  .badge { display: inline-block; font-size: 13px; font-weight: 700; padding: 2px 8px; border-radius: 6px; }
+  .badge.out { background: #fee2e2; color: #b91c1c; }
+  .badge.ok { background: #dcfce7; color: #15803d; }
+  .badge.key { background: #e0e7ff; color: #3730a3; }
   .ver { text-align: center; color: #94a3b8; font-size: 12px; margin: 16px 0; }
 </style>
 </head>
@@ -78,7 +89,8 @@
           <input id="inLoc" placeholder="เช่น 1-C1-1-01" autocomplete="off" autocapitalize="characters">
           <button class="btn-scan narrow" id="btnScanLoc">📷 สแกน</button>
         </div>
-        <button class="btn-main" id="btnSetLoc">ตกลง</button>
+        <button class="btn-main" id="btnSetLoc">ตกลง (เริ่มนับช่องนี้)</button>
+        <button class="btn-sec" id="btnLookSlot" style="width:100%;margin-top:8px">🔍 ดูช่อง — ช่องนี้เป็นที่ของสินค้าอะไร</button>
       </div>
       <div id="locShow" class="hidden">
         <div class="loc-big" id="locBig"></div>
@@ -87,6 +99,7 @@
           <button class="btn-sec" id="btnChange">เปลี่ยน</button>
           <button class="btn-sec" id="btnNext">ถัดไป ▶</button>
         </div>
+        <div id="homeBox" class="home hidden"></div>
       </div>
     </div>
 
@@ -102,7 +115,7 @@
       <label>จำนวนที่นับได้ (ชิ้น)</label>
       <input id="inQty" type="number" inputmode="numeric" min="0" step="1" placeholder="0">
       <button class="btn-main" id="btnSave">บันทึก</button>
-      <button class="btn-ghost" id="btnEmpty" style="margin-top:8px">ช่องนี้ไม่มีสินค้า</button>
+      <button class="btn-ghost" id="btnEmpty" style="margin-top:8px">ของหมด / ช่องว่าง</button>
     </div>
 
     <!-- รายการในช่อง -->
@@ -122,6 +135,19 @@
     <div id="reader"></div>
     <div class="muted" id="scanHint" style="margin-top:8px">เล็งกล้องไปที่ QR / บาร์โค้ด</div>
     <button class="btn-sec" id="btnScanCancel" style="width:100%;margin-top:10px">ปิดกล้อง</button>
+  </div>
+</div>
+
+<!-- ดูช่อง -->
+<div class="modal hidden" id="slotModal">
+  <div class="box" style="max-height:90vh;overflow:auto">
+    <div class="muted">ช่อง</div>
+    <div class="loc-big" id="slotLoc" style="padding-top:0"></div>
+    <div id="slotBody"></div>
+    <div class="stack">
+      <button class="btn-main" id="slotCount">นับช่องนี้</button>
+      <button class="btn-sec" id="slotClose">ปิด</button>
+    </div>
   </div>
 </div>
 
@@ -233,9 +259,66 @@ function setLoc(raw) {
 function loadList() {
   var loc = S.loc;
   $('list').innerHTML = '<li class="muted">กำลังโหลด…</li>'; $('listEmpty').classList.add('hidden');
-  call('getLocation', S.pin, loc).then(function (rows) { if (S.loc === loc) renderList(rows); })
+  $('homeBox').classList.add('hidden');
+  call('getSlotInfo', S.pin, loc).then(function (info) { if (S.loc === loc) { renderList(info.list); renderHome(info); } })
     .catch(function (e) { toast(errMsg(e), 'err'); renderList([]); });
 }
+/** อัปเดตกล่อง "ประจำช่องนี้" แบบเงียบๆ หลังบันทึก */
+function refreshHome() {
+  var loc = S.loc;
+  call('getSlotInfo', S.pin, loc).then(function (info) { if (S.loc === loc) renderHome(info); }).catch(function () {});
+}
+function renderHome(info) {
+  var box = $('homeBox');
+  if (!info.home.length) { box.classList.add('hidden'); return; }
+  box.innerHTML = '📌 <b>ประจำช่องนี้:</b> ' + info.home.map(function (h) {
+    return '<b class="c">' + esc(h.code) + '</b> ' + esc(h.name || '') + (Number(h.qty) === 0 ? ' <span class="out">(ของหมด)</span>' : '');
+  }).join('<br>');
+  box.classList.remove('hidden');
+}
+
+/* ---------- ดูช่อง ---------- */
+var slotShown = '';
+function showSlot(raw) {
+  var loc = normLoc(raw);
+  if (!loc) { toast('กรุณาระบุตำแหน่ง', 'err'); return; }
+  slotShown = loc;
+  $('slotLoc').textContent = loc;
+  $('slotBody').innerHTML = '<div class="muted">กำลังโหลด…</div>';
+  $('slotModal').classList.remove('hidden');
+  call('getSlotInfo', S.pin, loc).then(function (info) {
+    if (slotShown !== loc) return;
+    var h = '';
+    if (!info.home.length && !info.visitors.length) {
+      var empty = info.list.some(function (r) { return r.code === '(ช่องว่าง)'; });
+      h = '<div class="slot-item muted">' + (empty ? 'ช่องนี้ถูกบันทึกว่า <b>ว่าง</b> ยังไม่มีสินค้าประจำ' : 'ยังไม่มีข้อมูลสินค้าในช่องนี้ (ยังไม่เคยนับ)') + '</div>';
+    }
+    if (info.home.length) {
+      h += '<div style="font-weight:700;margin-top:4px">📌 สินค้าประจำช่องนี้</div>';
+      h += info.home.map(function (r) {
+        var zero = Number(r.qty) === 0;
+        var others = r.others.filter(function (o) { return Number(o.qty) > 0; });
+        return '<div class="slot-item"><div class="c">' + esc(r.code) + '</div><div>' + esc(r.name || '-') + '</div>' +
+          '<div class="q">' + (zero ? '<span class="badge out">ของหมด — ต้องเติม</span>' : '<span class="badge ok">มี ' + esc(r.qty) + ' ชิ้น</span>') +
+          (r.keyed ? ' <span class="badge key">คีย์ลง ChanaSoft แล้ว</span>' : '') + '</div>' +
+          '<div class="muted" style="margin-top:4px">นับล่าสุด ' + esc(r.at) + ' โดย ' + esc(r.who) + '</div>' +
+          (others.length ? '<div style="margin-top:6px">📦 มีของที่ช่องอื่น: ' + others.map(function (o) { return '<b class="c" style="font-size:15px">' + esc(o.loc) + '</b> (' + o.qty + ')'; }).join(', ') + '</div>' : '') +
+          '</div>';
+      }).join('');
+    }
+    if (info.visitors.length) {
+      h += '<div style="font-weight:700;margin-top:12px">สินค้าที่วางอยู่ แต่ประจำช่องอื่น</div>';
+      h += info.visitors.map(function (r) {
+        return '<div class="slot-item"><div class="c">' + esc(r.code) + '</div><div>' + esc(r.name || '-') + '</div>' +
+          '<div class="q">มี ' + esc(r.qty) + ' ชิ้น · ช่องประจำคือ <b class="c" style="font-size:15px">' + esc(r.home) + '</b></div></div>';
+      }).join('');
+    }
+    $('slotBody').innerHTML = h;
+  }).catch(function (e) { $('slotBody').innerHTML = '<div class="itemname warn">' + esc(errMsg(e)) + '</div>'; });
+}
+$('btnLookSlot').onclick = function () { var v = $('inLoc').value.trim(); if (v) showSlot(v); else openScan('look'); };
+$('slotClose').onclick = function () { $('slotModal').classList.add('hidden'); slotShown = ''; };
+$('slotCount').onclick = function () { var l = slotShown; $('slotModal').classList.add('hidden'); slotShown = ''; setLoc(l); };
 /** ช่องก่อน/ถัดไป: เปลี่ยนเลขท้ายสุด โดยคงจำนวนหลักเดิม */
 function stepLoc(d) {
   var m = S.loc.match(/^(.*?)(\d+)$/);
@@ -296,7 +379,7 @@ function save(replace, qtyOverride) {
         return;
       }
       buzz(); toast('บันทึกแล้ว ' + code + ' = ' + qty + ' ชิ้น', 'good');
-      renderList(r.list); clearItem();
+      renderList(r.list); clearItem(); refreshHome();
     })
     .catch(function (e) { toast(errMsg(e), 'err'); })
     .then(function () { busy(false); });
@@ -307,11 +390,14 @@ $('dupReplace').onclick = function () { $('dupModal').classList.add('hidden'); s
 $('dupCancel').onclick = function () { $('dupModal').classList.add('hidden'); };
 
 $('btnEmpty').onclick = function () {
-  if (S.list.some(function (r) { return r.code !== '(ช่องว่าง)'; }) &&
-      !confirm('ช่องนี้มีรายการที่นับไว้แล้ว ยืนยันว่าไม่มีสินค้า?')) return;
+  var real = S.list.filter(function (r) { return r.code !== '(ช่องว่าง)' && Number(r.qty) > 0; });
+  var msg = real.length
+    ? 'ของหมดช่อง ' + S.loc + '?\n\nระบบจะบันทึก ' + real.map(function (r) { return r.code; }).join(', ') + ' เป็น 0 ชิ้น\nช่องนี้ยังจำว่าเป็นที่ของสินค้าเดิม'
+    : 'บันทึกว่าช่อง ' + S.loc + ' ไม่มีสินค้า?';
+  if (!confirm(msg)) return;
   busy(true);
   call('markEmpty', S.pin, S.who, S.loc).then(function (r) {
-    buzz(); toast('บันทึกว่า ' + S.loc + ' ไม่มีสินค้า', 'good'); renderList(r.list);
+    buzz(); toast(r.zeroed ? 'บันทึกของหมด ' + r.zeroed + ' รายการ' : 'บันทึกว่า ' + S.loc + ' ว่าง', 'good'); renderList(r.list); refreshHome();
   }).catch(function (e) { toast(errMsg(e), 'err'); }).then(function () { busy(false); });
 };
 
@@ -325,12 +411,12 @@ function renderList(rows) {
     var li = document.createElement('li');
     li.innerHTML = '<div><div class="code">' + esc(r.code) + '</div><div class="nm">' + esc(r.name || '-') +
       '</div><div class="muted" style="font-size:12px">' + esc(r.who) + ' · ' + esc(r.time) + '</div></div>' +
-      '<div class="qty">' + esc(r.qty) + '</div>';
+      (Number(r.qty) === 0 && r.code !== '(ช่องว่าง)' ? '<div class="qty zero">0<br>หมด</div>' : '<div class="qty">' + esc(r.qty) + '</div>');
     var b = document.createElement('button'); b.className = 'del'; b.textContent = 'ลบ';
     b.onclick = function () {
-      if (!confirm('ลบรายการ ' + r.code + ' (' + r.qty + ' ชิ้น)?')) return;
+      if (!confirm('ลบรายการ ' + r.code + ' (' + r.qty + ' ชิ้น)?\n\n⚠ ถ้าของหมด ไม่ต้องลบ ให้บันทึก 0 หรือกด "ของหมด / ช่องว่าง" แทน\nลบเฉพาะกรณีสแกนผิด หรือสินค้าย้ายออกจากช่องนี้ถาวร')) return;
       busy(true);
-      call('deleteCount', S.pin, r.id, S.loc).then(function (rows) { renderList(rows); toast('ลบแล้ว'); })
+      call('deleteCount', S.pin, r.id, S.loc).then(function (rows) { renderList(rows); toast('ลบแล้ว'); refreshHome(); })
         .catch(function (e) { toast(errMsg(e), 'err'); }).then(function () { busy(false); });
     };
     li.appendChild(b); ul.appendChild(li);
@@ -342,7 +428,7 @@ var scanner = null, scanTarget = null;
 function openScan(target) {
   if (typeof Html5Qrcode === 'undefined') { toast('โหลดตัวสแกนไม่สำเร็จ ให้พิมพ์รหัสแทน', 'err'); return; }
   scanTarget = target;
-  $('scanTitle').textContent = target === 'loc' ? 'สแกน QR ที่สติ๊กเกอร์ช่อง' : 'สแกนบาร์โค้ดสินค้า';
+  $('scanTitle').textContent = target === 'code' ? 'สแกนบาร์โค้ดสินค้า' : (target === 'look' ? 'ดูช่อง: สแกน QR ที่สติ๊กเกอร์ช่อง' : 'สแกน QR ที่สติ๊กเกอร์ช่อง');
   $('scanHint').textContent = 'เล็งกล้องไปที่ QR / บาร์โค้ด';
   $('scanModal').classList.remove('hidden');
   var F = Html5QrcodeSupportedFormats;
@@ -363,6 +449,7 @@ function closeScan() {
 function onScanned(text) {
   var t = scanTarget; closeScan(); buzz(80);
   if (t === 'loc') setLoc(text);
+  else if (t === 'look') showSlot(text);
   else lookup(text, true);
 }
 $('btnScanLoc').onclick = function () { openScan('loc'); };

@@ -203,7 +203,7 @@ function render() {
     }
     var tags = '';
     if (r.keyed) tags += '<div class="tag chg">เดิมคีย์ไว้ ' + esc(r.keyed) + ' → ต้องแก้</div> ';
-    if (r.manual) tags += '<div class="tag man">เลือกเอง · <a href="#" data-auto="' + esc(r.code) + '">ใช้ช่องที่มากสุด</a></div>';
+    if (r.manual) tags += '<div class="tag man">เลือกเอง · <a href="#" data-auto="' + esc(r.code) + '">ยกเลิกที่เลือกเอง</a></div>';
     var chips = r.locs.map(function (l) {
       var pri = l.loc === r.primary;
       return '<span class="chip' + (pri ? ' pri' : '') + '"' + (pri ? ' title="ตำแหน่งหลัก"' : ' title="คลิกเพื่อใช้เป็นตำแหน่งหลัก" data-pri="' + esc(r.code) + '|' + esc(l.loc) + '"') + '>' + esc(l.loc) + ' (' + l.qty + ')</span>';
