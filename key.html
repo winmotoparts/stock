@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>รอคีย์ลง ChanaSoft · วินโมโตพาร์ท</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "Segoe UI", "Noto Sans Thai", Tahoma, sans-serif; background: #f1f5f9; color: #0f172a; font-size: 16px; }
+  header { background: #b91c1c; color: #fff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; z-index: 5; gap: 12px; }
+  header h1 { font-size: 19px; margin: 0; }
+  header .right { display: flex; align-items: center; gap: 12px; font-size: 14px; }
+  header a { color: #fff; }
+  header button { background: rgba(255,255,255,.18); color: #fff; border: 1px solid rgba(255,255,255,.4); }
+  main { max-width: 1180px; margin: 0 auto; padding: 16px; }
+  button { font-family: inherit; font-size: 15px; padding: 8px 12px; border-radius: 8px; border: none; cursor: pointer; }
+  input, select { font-family: inherit; font-size: 16px; padding: 10px 12px; border: 2px solid #cbd5e1; border-radius: 8px; outline: none; background: #fff; }
+  input:focus, select:focus { border-color: #b91c1c; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 14px; }
+  .stat { background: #fff; border-radius: 12px; padding: 14px 16px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .stat .n { font-size: 32px; font-weight: 800; line-height: 1.1; }
+  .stat .l { color: #64748b; font-size: 14px; }
+  .stat.todo .n { color: #b91c1c; }
+  .stat.ok .n { color: #15803d; }
+  .bar { height: 8px; background: #e2e8f0; border-radius: 99px; overflow: hidden; margin-top: 8px; }
+  .bar i { display: block; height: 100%; background: #15803d; width: 0; transition: width .3s; }
+  .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+  .tabs { display: flex; background: #e2e8f0; border-radius: 10px; padding: 4px; }
+  .tabs button { background: none; font-weight: 600; color: #475569; padding: 8px 16px; }
+  .tabs button.on { background: #fff; color: #0f172a; box-shadow: 0 1px 2px rgba(0,0,0,.1); }
+  .toolbar .grow { flex: 1; min-width: 200px; }
+  .card { background: #fff; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 13px; color: #64748b; font-weight: 600; padding: 10px 12px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
+  td { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+  tr:hover td { background: #fffbeb; }
+  tr.leaving td { opacity: 0; transition: opacity .25s; }
+  .num { color: #94a3b8; font-size: 13px; width: 36px; }
+  .mono { font-family: ui-monospace, Menlo, Consolas, monospace; font-weight: 700; }
+  .code { font-size: 17px; }
+  .show-sm { display: none; }
+  .loc { white-space: nowrap; font-size: 20px; color: #b91c1c; letter-spacing: .5px; }
+  .cp { background: #f1f5f9; color: #334155; font-size: 12px; padding: 3px 8px; margin-left: 6px; vertical-align: middle; }
+  .cp:hover { background: #e2e8f0; }
+  .cp.done { background: #dcfce7; color: #15803d; }
+  .nm { color: #334155; }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; }
+  .chip { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; background: #f1f5f9; color: #334155; border: 1px solid #e2e8f0; padding: 3px 7px; border-radius: 6px; cursor: pointer; }
+  .chip:hover { border-color: #b91c1c; }
+  .chip.pri { background: #fee2e2; border-color: #fca5a5; color: #991b1b; cursor: default; }
+  .tag { display: inline-block; font-size: 12px; padding: 2px 7px; border-radius: 6px; margin-top: 4px; }
+  .tag.chg { background: #fef3c7; color: #92400e; }
+  .tag.man { background: #e0e7ff; color: #3730a3; }
+  .tag a { color: inherit; }
+  .qty { font-weight: 700; text-align: right; white-space: nowrap; }
+  .btn-ok { background: #15803d; color: #fff; font-weight: 700; white-space: nowrap; padding: 10px 14px; }
+  .btn-ok:hover { background: #166534; }
+  .btn-undo { background: #f1f5f9; color: #b91c1c; }
+  .empty { padding: 40px; text-align: center; color: #64748b; }
+  .muted { color: #64748b; font-size: 13px; }
+  .hidden { display: none !important; }
+  .login { max-width: 380px; margin: 60px auto; background: #fff; padding: 22px; border-radius: 14px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+  .login input { width: 100%; margin: 4px 0 12px; }
+  .login button { width: 100%; background: #b91c1c; color: #fff; font-size: 17px; padding: 12px; }
+  .help { background: #fff7ed; border: 1px solid #fed7aa; color: #7c2d12; border-radius: 10px; padding: 10px 14px; font-size: 14px; margin-bottom: 12px; }
+  #toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: #0f172a; color: #fff; padding: 10px 18px; border-radius: 10px; z-index: 50; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  #toast.show { opacity: 1; } #toast.err { background: #b91c1c; } #toast.good { background: #15803d; }
+  @media (max-width: 760px) {
+    .hide-sm { display: none; }
+    .show-sm { display: block; }
+    .loc { font-size: 17px; }
+    .cp { display: block; margin: 4px 0 0; }
+    th { top: 0; }
+    .stat .n { font-size: 24px; }
+    td { padding: 8px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>รอคีย์ตำแหน่งลง ChanaSoft</h1>
+  <div class="right"><span id="whoBox"></span><button id="btnReload" class="hidden">⟳ โหลดใหม่</button></div>
+</header>
+
+<div id="loginView" class="login hidden">
+  <h3 style="margin-top:0">เข้าใช้งาน</h3>
+  <label class="muted">ชื่อผู้คีย์</label>
+  <input id="inWho" placeholder="เช่น ภคิณ">
+  <label class="muted">PIN</label>
+  <input id="inPin" type="password" inputmode="numeric">
+  <button id="btnLogin">เข้าสู่ระบบ</button>
+</div>
+
+<main id="appView" class="hidden">
+  <div class="stats">
+    <div class="stat todo"><div class="n" id="nTodo">–</div><div class="l">รอคีย์</div></div>
+    <div class="stat ok"><div class="n" id="nDone">–</div><div class="l">คีย์แล้ว</div></div>
+    <div class="stat"><div class="n" id="nAll">–</div><div class="l">สินค้าที่นับแล้วทั้งหมด</div><div class="bar"><i id="bar"></i></div></div>
+  </div>
+
+  <div class="help" id="help">
+    วิธีใช้: กด <b>คัดลอก</b> ที่รหัสสินค้า → วางค้นหาใน ChanaSoft → กด <b>คัดลอก</b> ที่ตำแหน่ง → วางในช่องตำแหน่งของ ChanaSoft แล้วบันทึก → กลับมากด <b>✓ คีย์แล้ว</b>
+    <a href="#" id="hideHelp" style="float:right;color:inherit">ซ่อน</a>
+  </div>
+
+  <div class="toolbar">
+    <div class="tabs">
+      <button id="tabTodo" class="on">รอคีย์</button>
+      <button id="tabDone">คีย์แล้ว</button>
+    </div>
+    <input class="grow" id="q" placeholder="ค้นหา รหัส / ชื่อสินค้า / ตำแหน่ง">
+    <select id="sort">
+      <option value="code">เรียงตามรหัสสินค้า</option>
+      <option value="loc">เรียงตามตำแหน่ง</option>
+    </select>
+  </div>
+
+  <div class="card">
+    <table>
+      <thead id="thead"></thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <div class="empty hidden" id="empty"></div>
+  </div>
+  <p class="muted" id="ver" style="text-align:center"></p>
+</main>
+
+<div id="toast"></div>
+
+<script>
+var API_URL = 'https://script.google.com/macros/s/AKfycbzVxl0FE--ZP61y2h15uy389Wcpx3gn3g4ujSJKnZwq0ry82_tEMPEod18tmt6AdQbeTA/exec';
+var S = { who: '', pin: '', tab: 'todo', data: { pending: [], done: [] } };
+var $ = function (id) { return document.getElementById(id); };
+function store(k, v) { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { return null; } }
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+function toast(m, k) { var t = $('toast'); t.textContent = m; t.className = 'show ' + (k || ''); clearTimeout(toast.t); toast.t = setTimeout(function () { t.className = ''; }, k === 'err' ? 3500 : 1600); }
+
+function call(fn) {
+  var args = Array.prototype.slice.call(arguments, 1);
+  if (!/^https:\/\/script\.google\.com\/.+\/exec$/.test(API_URL)) return Promise.reject(new Error('ยังไม่ได้ใส่ลิงก์ Apps Script ในไฟล์ config.js'));
+  return fetch(API_URL, { method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ fn: fn, args: args }) })
+    .then(function (r) { if (!r.ok) throw new Error('เชื่อมต่อไม่สำเร็จ (' + r.status + ')'); return r.json(); })
+    .then(function (j) { if (!j.ok) throw new Error(j.error); return j.data; },
+          function (e) { throw new Error(e && e.message === 'Failed to fetch' ? 'เชื่อมต่อไม่ได้ ตรวจสอบอินเทอร์เน็ต' : (e.message || String(e))); });
+}
+
+/* ---------- login ---------- */
+function showLogin() { $('loginView').classList.remove('hidden'); $('appView').classList.add('hidden'); $('btnReload').classList.add('hidden'); $('whoBox').innerHTML = ''; $('inWho').value = store('sc_who') || ''; }
+function doLogin(who, pin, silent) {
+  return call('login', pin).then(function () {
+    S.who = who; S.pin = pin; store('sc_who', who); store('sc_pin', pin);
+    $('loginView').classList.add('hidden'); $('appView').classList.remove('hidden'); $('btnReload').classList.remove('hidden');
+    $('whoBox').innerHTML = 'ผู้คีย์: <b>' + esc(who) + '</b> <a href="#" id="out">เปลี่ยน</a>';
+    $('out').onclick = function (e) { e.preventDefault(); store('sc_pin', ''); showLogin(); };
+    load();
+  }).catch(function (e) { if (silent) showLogin(); else toast(e.message, 'err'); });
+}
+$('btnLogin').onclick = function () { var w = $('inWho').value.trim(); if (!w) return toast('กรุณาใส่ชื่อ', 'err'); doLogin(w, $('inPin').value.trim()); };
+$('inPin').onkeydown = function (e) { if (e.key === 'Enter') $('btnLogin').click(); };
+
+/* ---------- data ---------- */
+function load() {
+  $('tbody').innerHTML = '<tr><td colspan="7" class="empty">กำลังโหลด…</td></tr>';
+  return call('getKeyList', S.pin).then(function (d) { S.data = d; $('ver').textContent = 'เวอร์ชัน ' + d.version; render(); })
+    .catch(function (e) { toast(e.message, 'err'); $('tbody').innerHTML = ''; });
+}
+$('btnReload').onclick = load;
+
+function updateStats() {
+  var p = S.data.pending.length, d = S.data.done.length, a = p + d;
+  $('nTodo').textContent = p.toLocaleString(); $('nDone').textContent = d.toLocaleString(); $('nAll').textContent = a.toLocaleString();
+  $('bar').style.width = (a ? Math.round(d / a * 100) : 0) + '%';
+  $('tabTodo').textContent = 'รอคีย์ (' + p + ')'; $('tabDone').textContent = 'คีย์แล้ว (' + d + ')';
+}
+
+function filtered() {
+  var list = (S.tab === 'todo' ? S.data.pending : S.data.done).slice();
+  var q = $('q').value.trim().toUpperCase();
+  if (q) list = list.filter(function (r) {
+    return r.code.toUpperCase().indexOf(q) >= 0 || String(r.name).toUpperCase().indexOf(q) >= 0 ||
+      r.locs.some(function (l) { return l.loc.indexOf(q) >= 0; });
+  });
+  if ($('sort').value === 'loc') list.sort(function (a, b) { return a.primary < b.primary ? -1 : a.primary > b.primary ? 1 : 0; });
+  else if (S.tab === 'todo') list.sort(function (a, b) { return a.code < b.code ? -1 : a.code > b.code ? 1 : 0; });
+  return list;
+}
+
+function cpBtn(text) { return '<button class="cp" data-cp="' + esc(text) + '">คัดลอก</button>'; }
+
+function render() {
+  updateStats();
+  var list = filtered(), todo = S.tab === 'todo';
+  $('thead').innerHTML = todo
+    ? '<tr><th class="num">#</th><th>รหัสสินค้า</th><th class="hide-sm">ชื่อสินค้า</th><th>ตำแหน่งที่ต้องคีย์</th><th class="hide-sm">ช่องที่นับได้ (จำนวน)</th><th class="hide-sm" style="text-align:right">รวม</th><th></th></tr>'
+    : '<tr><th class="num">#</th><th>รหัสสินค้า</th><th class="hide-sm">ชื่อสินค้า</th><th>ตำแหน่งที่คีย์</th><th class="hide-sm">คีย์เมื่อ</th><th class="hide-sm">ผู้คีย์</th><th></th></tr>';
+  var html = list.map(function (r, i) {
+    var nameCell = '<td class="hide-sm nm">' + esc(r.name || '-') + '</td>';
+    var codeCell = '<td><span class="mono code">' + esc(r.code) + '</span>' + cpBtn(r.code) + '<div class="muted show-sm">' + esc(r.name) + '</div></td>';
+    if (!todo) {
+      return '<tr data-code="' + esc(r.code) + '"><td class="num">' + (i + 1) + '</td>' + codeCell + nameCell +
+        '<td><span class="mono loc">' + esc(r.keyed) + '</span></td><td class="hide-sm muted">' + esc(r.at) + '</td><td class="hide-sm muted">' + esc(r.who) +
+        '</td><td style="text-align:right"><button class="btn-undo" data-undo="' + esc(r.code) + '">ยกเลิก</button></td></tr>';
+    }
+    var tags = '';
+    if (r.keyed) tags += '<div class="tag chg">เดิมคีย์ไว้ ' + esc(r.keyed) + ' → ต้องแก้</div> ';
+    if (r.manual) tags += '<div class="tag man">เลือกเอง · <a href="#" data-auto="' + esc(r.code) + '">ใช้ช่องที่มากสุด</a></div>';
+    var chips = r.locs.map(function (l) {
+      var pri = l.loc === r.primary;
+      return '<span class="chip' + (pri ? ' pri' : '') + '"' + (pri ? ' title="ตำแหน่งหลัก"' : ' title="คลิกเพื่อใช้เป็นตำแหน่งหลัก" data-pri="' + esc(r.code) + '|' + esc(l.loc) + '"') + '>' + esc(l.loc) + ' (' + l.qty + ')</span>';
+    }).join('');
+    return '<tr data-code="' + esc(r.code) + '"><td class="num">' + (i + 1) + '</td>' + codeCell + nameCell +
+      '<td><span class="mono loc">' + esc(r.primary) + '</span>' + cpBtn(r.primary) + '<div>' + tags + '</div></td>' +
+      '<td class="hide-sm"><div class="chips">' + chips + '</div></td><td class="hide-sm qty">' + r.total + '</td>' +
+      '<td style="text-align:right"><button class="btn-ok" data-ok="' + esc(r.code) + '|' + esc(r.primary) + '">✓ คีย์แล้ว</button></td></tr>';
+  }).join('');
+  $('tbody').innerHTML = html;
+  var empty = $('empty');
+  empty.classList.toggle('hidden', list.length > 0);
+  empty.textContent = $('q').value ? 'ไม่พบรายการที่ค้นหา' : (todo ? '🎉 คีย์ครบหมดแล้ว ไม่มีรายการรอคีย์' : 'ยังไม่มีรายการที่คีย์แล้ว');
+}
+
+/* ---------- actions ---------- */
+function copyText(t, btn) {
+  var done = function () { if (btn) { btn.textContent = '✓ คัดลอกแล้ว'; btn.classList.add('done'); setTimeout(function () { btn.textContent = 'คัดลอก'; btn.classList.remove('done'); }, 1500); } };
+  if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(t).then(done, function () { fallbackCopy(t); done(); });
+  else { fallbackCopy(t); done(); }
+}
+function fallbackCopy(t) { var a = document.createElement('textarea'); a.value = t; document.body.appendChild(a); a.select(); try { document.execCommand('copy'); } catch (e) {} a.remove(); }
+
+function moveRow(code, from, to, patch) {
+  var src = S.data[from], i = src.findIndex(function (r) { return r.code === code; });
+  if (i < 0) return null;
+  var r = src.splice(i, 1)[0]; Object.assign(r, patch || {}); S.data[to].unshift(r); return r;
+}
+
+$('tbody').addEventListener('click', function (e) {
+  var t = e.target;
+  if (t.dataset.cp != null) { copyText(t.dataset.cp, t); return; }
+  if (t.dataset.ok) {
+    var p = t.dataset.ok.split('|'), code = p[0], loc = p[1];
+    var tr = t.closest('tr'); tr.classList.add('leaving'); t.disabled = true;
+    call('markKeyed', S.pin, S.who, code, loc).then(function () {
+      moveRow(code, 'pending', 'done', { keyed: loc, who: S.who, at: 'เมื่อสักครู่' });
+      toast('✓ ' + code + ' → ' + loc, 'good'); setTimeout(render, 250);
+    }).catch(function (er) { tr.classList.remove('leaving'); t.disabled = false; toast(er.message, 'err'); });
+    return;
+  }
+  if (t.dataset.undo) {
+    var c = t.dataset.undo;
+    if (!confirm('ยกเลิกสถานะ "คีย์แล้ว" ของ ' + c + ' ?')) return;
+    call('undoKeyed', S.pin, c).then(function () { moveRow(c, 'done', 'pending', { keyed: '' }); render(); toast('ย้ายกลับไปรอคีย์แล้ว'); })
+      .catch(function (er) { toast(er.message, 'err'); });
+    return;
+  }
+  if (t.dataset.pri) {
+    var q = t.dataset.pri.split('|');
+    if (!confirm('ใช้ ' + q[1] + ' เป็นตำแหน่งหลักของ ' + q[0] + ' ?')) return;
+    call('setPrimary', S.pin, q[0], q[1]).then(load).catch(function (er) { toast(er.message, 'err'); });
+    return;
+  }
+  if (t.dataset.auto) {
+    e.preventDefault();
+    call('setPrimary', S.pin, t.dataset.auto, '').then(load).catch(function (er) { toast(er.message, 'err'); });
+  }
+});
+
+$('tabTodo').onclick = function () { S.tab = 'todo'; this.classList.add('on'); $('tabDone').classList.remove('on'); render(); };
+$('tabDone').onclick = function () { S.tab = 'done'; this.classList.add('on'); $('tabTodo').classList.remove('on'); render(); };
+$('q').oninput = render; $('sort').onchange = render;
+$('hideHelp').onclick = function (e) { e.preventDefault(); $('help').classList.add('hidden'); store('key_help', 'off'); };
+if (store('key_help') === 'off') $('help').classList.add('hidden');
+
+(function () { var w = store('sc_who'), p = store('sc_pin'); if (w && p) doLogin(w, p, true); else showLogin(); })();
+</script>
+</body>
+</html>
