@@ -25,7 +25,7 @@
   button.ghost { border:2px solid var(--line); background:#fff; color:var(--ink); border-radius:10px; padding:10px 14px; font:inherit; font-weight:600; }
   .acts { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; }
   .acts .main { grid-column:1 / -1; font-size:22px; padding:20px; }
-  .take{background:var(--pri)} .picked{background:#0e7490} .packed{background:var(--ok)} .ship{background:#7c3aed} .short{background:var(--warn)} .redo{background:var(--bad)}
+  button.big.queue{background:#334155} button.big.front{background:#c2410c} button.big.take{background:var(--pri)} button.big.picked{background:#0e7490} button.big.packed{background:var(--ok)} button.big.ship{background:#7c3aed} button.big.short{background:var(--warn)} button.big.redo{background:var(--bad)}
   .q { font-size:56px; font-weight:700; line-height:1; }
   .bill { font-size:20px; font-weight:600; }
   .chip { display:inline-block; padding:4px 12px; border-radius:999px; font-weight:700; font-size:16px; background:#e5e7eb; }
@@ -38,6 +38,12 @@
   .item { display:flex; justify-content:space-between; align-items:center; padding:10px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; font:inherit; text-align:left; width:100%; }
   .item b { font-size:20px; margin-right:8px; }
   .item.late { border-color:var(--bad); background:#fef2f2; }
+  .item.late .tl { color:var(--bad); font-weight:700; }
+  .acts .two { grid-column:auto; font-size:21px; padding:22px 8px; }
+  .ty { display:inline-block; padding:3px 10px; border-radius:8px; font-weight:700; font-size:15px; margin-right:6px; }
+  .ty1{background:#fee2e2;color:#991b1b} .ty2{background:#ffedd5;color:#9a3412} .ty3{background:#fef9c3;color:#854d0e} .ty4{background:#dbeafe;color:#1e40af} .ty5{background:#ede9fe;color:#5b21b6} .ty6{background:#f3f4f6;color:#4b5563}
+  .tl { color:var(--mute); font-size:14px; }
+  @keyframes blink { 50% { opacity:.45 } } .item.late.lv1 { animation:blink 1.2s infinite; }
   .modal { position:fixed; inset:0; background:rgba(0,0,0,.45); display:none; align-items:flex-end; justify-content:center; z-index:10; }
   .modal.show { display:flex; }
   .sheet { background:#fff; width:100%; max-width:760px; max-height:88vh; overflow:auto; border-radius:18px 18px 0 0; padding:16px; }
@@ -82,9 +88,9 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbwSApgfF0Xwd7N7d7OXpuo1
 const KEY = 'win-pick-2569';   // ต้องตรงกับ PICK_KEY ในโค้ดบอท
 // =====================================
 
-const LABEL = { take:'▶️ รับจัด', picked:'✅ จัดเสร็จ', packed:'📦 แพ็คแล้ว', ship:'🚚 ส่งแล้ว', short:'⚠️ ของขาด', redo:'🔁 จัดผิด' };
+const LABEL = { queue:'📥 ส่งเข้าคิวจัด', front:'🏁 จบที่หน้าร้าน', take:'▶️ รับจัด', picked:'✅ จัดเสร็จ', packed:'📦 แพ็คแล้ว', ship:'🚚 ส่งแล้ว', short:'⚠️ ของขาด', redo:'🔁 จัดผิด' };
 const METHODS = ['รถร้าน', 'ขนส่ง', 'รถประจำทาง', 'รับเอง'];
-const CARRIERS = ['Kerry', 'Flash', 'J&T', 'ไปรษณีย์', 'นิ่มเอ็กซ์เพรส', 'อื่นๆ'];
+const CARRIERS = ['KERRY', 'FLASH', 'J&T', 'ไปรษณีย์ไทย', 'SPX', 'เจ้สั้น', 'รถตู้', 'รถบัส', 'อื่นๆ'];
 const PKGS = ['1 กล่อง', '2 กล่อง', '3 กล่อง', '1 ถุง', '1 กระสอบ', '1 มัด'];
 const store = { get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } },
                 set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
@@ -96,6 +102,14 @@ function beep(ok) { try { const a = new (window.AudioContext || window.webkitAud
 function mins(t) { return t ? Math.floor((Date.now() - t) / 60000) : null; }
 function hm(t) { if (!t) return ''; const d = new Date(t); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c])); }
+function tyBadge(b) { const t = b.type; return t ? '<span class="ty ty' + t.lvl + '">' + t.icon + ' ' + esc(t.label) + '</span>' : ''; }
+// เกินเวลาไหม: ด่วน/ช่าง/ส่งใกล้ = รอเกิน X นาที (ยังไม่แพ็ค) · รถร้าน/ขนส่ง = เลยเวลาที่ต้องแพ็คเสร็จ
+function lateInfo(b) {
+  const a = b.alert || {}, done = ['แพ็คแล้ว', 'ส่งแล้ว', 'ยกเลิก'].includes(b.status);
+  if (a.mode === 'wait') { const m = mins(b.created); return { late: !done && m !== null && m >= a.min, text: done || m === null ? '' : 'รอ ' + m + ' นาที' }; }
+  if (a.mode === 'due') return { late: !done && Date.now() >= a.at, text: done ? '' : 'แพ็คก่อน ' + hm(a.at) + (a.note ? ' (' + a.note + ')' : '') };
+  return { late: false, text: a.note || '' };
+}
 function shortBill(b) { return String(b || '').replace(/^SO\d{4}-0*/, ''); }
 
 async function api(params) {
@@ -143,21 +157,23 @@ $('camBtn').onclick = toggleCam;
 
 // ---------- การ์ดบิล ----------
 function renderCard(b) {
-  const late = b.taken && !b.picked && mins(b.taken) >= slowMin;
-  const order = station === 'front' ? ['take', 'picked', 'short', 'packed'] : ['picked', 'packed', 'ship', 'redo', 'short', 'take'];
+  const late = b.taken && !b.picked && mins(b.taken) >= slowMin, li = lateInfo(b);
+  const order = station === 'front' ? ['queue', 'front', 'take', 'picked', 'short', 'packed'] : ['picked', 'packed', 'ship', 'redo', 'short', 'take'];
   const acts = order.filter(a => (b.acts || []).includes(a));
+  const pair = acts[0] === 'queue' && acts[1] === 'front';   // หน้าร้าน: 2 ปุ่มใหญ่คู่กัน ให้พนักงานขายเลือก
   $('card').innerHTML =
     '<div class="row" style="justify-content:space-between;align-items:flex-start">' +
       '<div><div class="q">' + esc(b.queue || shortBill(b.bill)) + '</div><div class="bill">' + esc(b.bill) + (b.items ? ' · ' + esc(b.items) + ' รายการ' : '') + '</div></div>' +
       '<span class="chip st-' + esc(b.status) + '">' + esc(b.status) + '</span></div>' +
+    '<div style="margin-top:8px">' + tyBadge(b) + (li.text ? '<span class="' + (li.late ? 'slow' : 'tl') + '">' + (li.late ? '⏰ ' : '') + esc(li.text) + '</span>' : '') + '</div>' +
     '<div class="meta">' +
       (b.picker ? '👷 จัด: <b>' + esc(b.picker) + '</b>' + (b.taken ? ' · รับ ' + hm(b.taken) : '') + (b.picked ? ' · เสร็จ ' + hm(b.picked) : (b.taken ? ' · <span class="' + (late ? 'slow' : '') + '">' + mins(b.taken) + ' นาที</span>' : '')) + '<br>' : '') +
       (b.checker ? '✔️ เช็ค/แพ็ค: <b>' + esc(b.checker) + '</b> ' + hm(b.packed) + (b.pkg ? ' · ' + esc(b.pkg) : '') + '<br>' : '') +
       (b.method ? '🚚 ' + esc(b.method) + '<br>' : '') + (b.errors ? '🔁 จัดผิด ' + b.errors + ' ครั้ง<br>' : '') + (b.note ? '💬 ' + esc(b.note) : '') +
     '</div>' +
-    (acts.length ? '<div class="acts">' + acts.map((a, i) => '<button class="big ' + a + (i === 0 ? ' main' : '') + '" data-a="' + a + '">' + LABEL[a] + '</button>').join('') + '</div>'
+    (acts.length ? '<div class="acts">' + acts.map((a, i) => '<button class="big ' + a + (pair && i < 2 ? ' two' : i === 0 ? ' main' : '') + '" data-a="' + a + '">' + LABEL[a] + '</button>').join('') + '</div>'
       : '<div class="meta">✅ บิลนี้ปิดแล้ว</div>');
-  $('card').querySelectorAll('[data-a]').forEach(el => el.onclick = () => openAction(el.dataset.a));
+  $('card').querySelectorAll('[data-a]').forEach(el => el.onclick = () => el.dataset.a === 'queue' ? submit('queue', '') : openAction(el.dataset.a));
 }
 
 // ---------- เลือกชื่อ + ข้อมูลเพิ่ม ----------
@@ -171,8 +187,16 @@ function openAction(a) {
   let extra = '';
   if (a === 'packed') extra = '<h2>จำนวนหีบห่อ</h2><div class="opts" id="pkgOpts">' + PKGS.map(p => '<button>' + p + '</button>').join('') + '</div>' +
     '<input type="text" id="pkgIn" placeholder="หรือพิมพ์ เช่น 2 กล่อง 1 กระสอบ">';
-  if (a === 'ship') extra = '<h2>วิธีส่ง</h2><div class="opts" id="mOpts">' + METHODS.map(m => '<button' + (m === current.method ? ' class="on"' : '') + '>' + m + '</button>').join('') + '</div>' +
-    '<div id="shipMore" style="display:none"><div class="opts" id="cOpts">' + CARRIERS.map(c => '<button>' + c + '</button>').join('') + '</div><input type="text" id="trackIn" placeholder="เลขพัสดุ (ถ้ามี)"></div>';
+  if (a === 'ship') {
+    const needC = /ขนส่ง|ประจำทาง/.test(current.method || ''), cs = CARRIERS.slice();
+    if (current.carrier && !cs.some(c => c.toLowerCase() === current.carrier.toLowerCase()) && /ขนส่ง|ประจำทาง/.test(current.method)) cs.unshift(current.carrier);
+    extra = '<h2>วิธีส่ง' + (current.type ? ' <span class="hint">(ตั้งให้จาก "' + esc(current.type.ship || current.type.label) + '")</span>' : '') + '</h2><div class="opts" id="mOpts">' +
+      METHODS.map(m => '<button' + (m === current.method ? ' class="on"' : '') + '>' + m + '</button>').join('') + '</div>' +
+      '<div id="shipMore" style="display:' + (needC ? 'block' : 'none') + '"><div class="opts" id="cOpts">' +
+      cs.map(c => '<button' + (current.carrier && c.toLowerCase() === current.carrier.toLowerCase() ? ' class="on"' : '') + '>' + esc(c) + '</button>').join('') +
+      '</div><input type="text" id="trackIn" placeholder="เลขพัสดุ (ถ้ามี)"></div>';
+  }
+  if (a === 'front') extra = '<div class="meta" style="margin-top:8px">🏁 บันทึกว่า <b>คนที่แตะชื่อ</b> จัด เช็ค และส่งมอบลูกค้าเองที่หน้าร้าน บิลนี้ปิดเลย ไม่ต้องผ่านหลังร้าน</div>';
   if (a === 'short' || a === 'redo') extra = '<h2>' + (a === 'short' ? 'ขาดอะไร' : 'ผิดอะไร') + '</h2><input type="text" id="noteIn" placeholder="' + (a === 'short' ? 'รหัส/ชื่อสินค้าที่ขาด' : 'เช่น หยิบผิดรุ่น 10011') + '">';
   $('sheet').innerHTML = '<div class="row" style="justify-content:space-between"><h2 style="margin:0">' + LABEL[a] + ' · คิว ' + esc(current.queue || shortBill(current.bill)) + '</h2><button class="ghost" id="xBtn">✕</button></div>' +
     extra + '<h2 style="margin-top:12px">ใครทำ? (แตะชื่อเพื่อบันทึก)</h2><div class="names">' +
@@ -182,7 +206,7 @@ function openAction(a) {
   $('xBtn').onclick = closeModal;
   const pick = (box, inp) => box && box.querySelectorAll('button').forEach(btn => btn.onclick = () => {
     box.querySelectorAll('button').forEach(x => x.classList.remove('on')); btn.classList.add('on'); if (inp) inp.value = btn.textContent;
-    if (box.id === 'mOpts') $('shipMore').style.display = btn.textContent === 'ขนส่ง' ? 'block' : 'none';
+    if (box.id === 'mOpts') $('shipMore').style.display = /ขนส่ง|ประจำทาง/.test(btn.textContent) ? 'block' : 'none';
   });
   pick($('pkgOpts'), $('pkgIn')); pick($('mOpts')); pick($('cOpts'));
   $('sheet').querySelectorAll('[data-u]').forEach(el => el.onclick = () => submit(a, el.dataset.u));
@@ -195,7 +219,7 @@ async function submit(a, uid, force) {
   if (a === 'packed') p.pkg = ($('pkgIn') || {}).value || '';
   if (a === 'ship') {
     const m = document.querySelector('#mOpts .on'); if (!m) return toast('เลือกวิธีส่งก่อน', true);
-    p.method = m.textContent; const c = document.querySelector('#cOpts .on'); if (c && p.method === 'ขนส่ง') p.carrier = c.textContent;
+    p.method = m.textContent; const c = document.querySelector('#cOpts .on'); if (c && /ขนส่ง|ประจำทาง/.test(p.method)) p.carrier = c.textContent;
     p.track = ($('trackIn') || {}).value || '';
   }
   if (a === 'short' || a === 'redo') { p.note = ($('noteIn') || {}).value || ''; if (!p.note.trim()) return toast('พิมพ์รายละเอียดก่อน', true); }
@@ -204,6 +228,10 @@ async function submit(a, uid, force) {
     const r = await api(p);
     if (!r.ok && r.confirm) { if (confirm(r.err)) return submit(a, uid, true); return; }
     if (!r.ok) { beep(false); return toast(r.err, true); }
+    if (a === 'queue') {
+      beep(true); toast((r.already ? 'อยู่ในคิวแล้ว' : '📥 เข้าคิวจัดแล้ว') + ' · คิว ' + (r.bill.queue || shortBill(r.bill.bill)) + ' ' + (r.bill.type ? r.bill.type.icon + ' ' + r.bill.type.label : ''));
+      $('card').style.display = 'none'; current = null; loadBoard(); $('manual').focus(); return;
+    }
     store.set('last_' + station + '_' + a, uid); store.set('last_' + station, uid);
     const who = (staff.find(s => s.uid === uid) || {}).name || '';
     beep(true); toast(LABEL[a].replace(/^\S+\s/, '') + ' · คิว ' + (r.bill.queue || shortBill(r.bill.bill)) + ' · ' + who);
@@ -218,11 +246,15 @@ async function loadBoard() {
 }
 function renderBoard() {
   const want = station === 'front' ? ['รอจัด', 'จัดผิด', 'ของขาด', 'กำลังจัด'] : ['จัดเสร็จ', 'กำลังจัด', 'แพ็คแล้ว', 'จัดผิด', 'ของขาด'];
-  const list = board.filter(b => want.includes(b.status)).sort((x, y) => want.indexOf(x.status) - want.indexOf(y.status) || (x.taken || x.created) - (y.taken || y.created));
+  // เรียง: เกินเวลาก่อน → ความด่วน (ปลีก > ช่าง > ส่งใกล้ > รถร้าน > ขนส่ง > มารับภายหลัง) → เข้าคิวก่อน
+  const lv = b => b.type ? b.type.lvl : 9;
+  const list = board.filter(b => want.includes(b.status)).map(b => Object.assign(b, { li: lateInfo(b) }))
+    .sort((x, y) => (y.li.late - x.li.late) || lv(x) - lv(y) || (x.created || 0) - (y.created || 0));
   $('board').innerHTML = list.length ? list.map(b => {
-    const late = b.status === 'กำลังจัด' && mins(b.taken) >= slowMin;
-    return '<button class="item' + (late ? ' late' : '') + '" data-b="' + esc(b.bill) + '"><span><b>' + esc(b.queue || shortBill(b.bill)) + '</b>' + esc(b.picker || '') +
-      (b.status === 'กำลังจัด' && b.taken ? ' · ' + mins(b.taken) + ' นาที' : '') + '</span><span class="chip st-' + esc(b.status) + '">' + esc(b.status) + '</span></button>';
+    const slow = b.status === 'กำลังจัด' && mins(b.taken) >= slowMin, late = b.li.late || slow;
+    return '<button class="item' + (late ? ' late lv' + lv(b) : '') + '" data-b="' + esc(b.bill) + '"><span><b>' + esc(b.queue || shortBill(b.bill)) + '</b>' + tyBadge(b) + esc(b.picker || '') +
+      (b.status === 'กำลังจัด' && b.taken ? ' · จัด ' + mins(b.taken) + ' นาที' : '') + (b.li.text ? '<br><span class="tl">' + (b.li.late ? '⏰ ' : '') + esc(b.li.text) + '</span>' : '') +
+      '</span><span class="chip st-' + esc(b.status) + '">' + esc(b.status) + '</span></button>';
   }).join('') : '<div class="hint">ไม่มีรายการค้าง 🎉</div>';
   $('board').querySelectorAll('[data-b]').forEach(el => el.onclick = () => { lastCode = ''; onCode(el.dataset.b); window.scrollTo({ top: 0, behavior: 'smooth' }); });
 }
