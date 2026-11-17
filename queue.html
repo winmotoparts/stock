@@ -78,6 +78,8 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbwSApgfF0Xwd7N7d7OXpuo1
 const KEY = 'win-pick-2569';
 const REFRESH_SEC = 15;                                   // ดึงข้อมูลใหม่ทุกกี่วินาที
 const CALL_TYPES = ['retail', 'tech', 'later', 'other'];  // หน้าร้าน: ประเภทที่ "ประกาศเรียก" เมื่อแพ็คเสร็จ (ลูกค้ามารับเอง) — ประเภทอื่นแค่ขึ้นจอ ไม่เรียก
+const READY_HIDE_MIN = 30;                                // หน้าร้าน: "พร้อมรับ" ค้างบนจอเกินกี่นาที ย้ายออกจากจอ (สถานะในระบบยังไม่ปิด)
+const FRONT_NAME = 'short';                               // ชื่อลูกค้าบนจอหน้าร้าน: 'full' = เต็ม · 'short' = บางส่วน (สมชาย ย.) · 'none' = ไม่แสดง
 const SPEAK = true;                                       // true = พูดเลขคิว (ถ้าทีวีมีเสียงภาษาไทย) / false = แค่เสียงกริ่ง
 // ==============================================
 
@@ -89,6 +91,13 @@ const mins = t => t ? Math.floor((Date.now() - t) / 60000) : null;
 const hm = t => { if (!t) return ''; const d = new Date(t); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
 const qn = b => b.queue || String(b.bill || '').replace(/^[A-Z]+\d{4}-0*/, '');
 const lv = b => b.type ? b.type.lvl : 9;
+function custShort(n) {
+  n = String(n || '').trim(); if (!n || FRONT_NAME === 'none') return '';
+  if (FRONT_NAME === 'full') return n;
+  const w = n.split(/\s+/);
+  if (w.length > 1) return w[0] + ' ' + Array.from(w[1])[0] + '.';
+  const a = Array.from(n); return a.length > 9 ? a.slice(0, 8).join('') + '…' : n;
+}
 let board = [], slowMin = 15, first = true, seenPacked = {}, seenLate = {}, audio = null, failCount = 0;
 
 function lateInfo(b) {
@@ -123,7 +132,7 @@ function announce(b) { callQ.push(b); if (!calling) nextCall(); }
 function nextCall() {
   const b = callQ.shift(); if (!b) { calling = false; $('call').classList.remove('show'); return; }
   calling = true;
-  $('callQ').textContent = qn(b); $('callT').textContent = b.type ? b.type.icon + ' ' + b.type.label : '';
+  $('callQ').textContent = qn(b); $('callT').textContent = custShort(b.cust) || (b.type ? b.type.icon + ' ' + b.type.label : '');
   $('call').classList.add('show'); chime(2); say('เชิญคิวที่ ' + qn(b) + ' รับสินค้าค่ะ');
   setTimeout(nextCall, 6000);
 }
@@ -199,7 +208,7 @@ function renderBack() {
       else if (c.k === 'picked') sub = 'จัด: ' + (b.picker || '-') + (b.li.text ? ' · ' + b.li.text : '');
       else sub = '✔️ ' + (b.checker || '-') + (b.pkg ? ' · ' + b.pkg : '') + (b.type && b.type.lvl >= 4 && b.alert && b.alert.note ? ' · ' + b.alert.note : '');
       return '<div class="card lv' + lv(b) + (b.li.late ? ' late' : b.li.soon ? ' warn' : '') + '"><div class="q">' + esc(qn(b)) + '</div>' +
-        '<div class="t">' + (b.type ? b.type.icon + ' ' + esc(b.type.label) : '') + (b.items ? ' · ' + esc(b.items) + ' รายการ' : '') + '</div>' +
+        '<div class="t">' + (b.cust ? '👤 ' + esc(b.cust) + ' · ' : '') + (b.type ? b.type.icon + ' ' + esc(b.type.label) : '') + (b.items ? ' · ' + esc(b.items) + ' รายการ' : '') + '</div>' +
         '<div class="s">' + (b.li.late ? '⏰ ' : '') + esc(sub) + '</div></div>';
     }, rowPx) : '<div class="empty">—</div>';
   });
@@ -216,10 +225,10 @@ function renderFront() {
   if (!$('main').children.length)
     $('main').innerHTML = '<div class="col"><h2 class="h-doing">⏳ กำลังเตรียมสินค้า</h2><div class="grid" id="g-doing"></div></div>' +
       '<div class="col ready"><h2 class="h-ready">✅ พร้อมรับสินค้า</h2><div class="grid" id="g-ready"></div></div>';
-  const tile = (b, isNew) => '<div class="tile' + (isNew ? ' new' : '') + '"><div class="q">' + esc(qn(b)) + '</div><div class="ic">' + (b.type ? b.type.icon + ' ' + esc(b.type.label) : '') + '</div></div>';
+  const tile = (b, isNew) => '<div class="tile' + (isNew ? ' new' : '') + '"><div class="q">' + esc(qn(b)) + '</div><div class="ic">' + (custShort(b.cust) ? esc(custShort(b.cust)) : (b.type ? b.type.icon + ' ' + esc(b.type.label) : '')) + '</div></div>';
   const doing = board.filter(b => ['รอจัด', 'กำลังจัด', 'จัดเสร็จ', 'ของขาด', 'จัดผิด'].includes(b.status))
     .sort((x, y) => (Number(x.queue) || 9999) - (Number(y.queue) || 9999) || (x.created || 0) - (y.created || 0));
-  const ready = board.filter(b => b.status === 'แพ็คแล้ว').sort((x, y) => (y.packed || 0) - (x.packed || 0));   // แพ็คล่าสุดอยู่บน
+  const ready = board.filter(b => b.status === 'แพ็คแล้ว' && !(b.packed && mins(b.packed) >= READY_HIDE_MIN)).sort((x, y) => (y.packed || 0) - (x.packed || 0));   // แพ็คล่าสุดอยู่บน
   const cap = (list, n) => list.slice(0, n);
   $('g-doing').innerHTML = doing.length ? cap(doing, 15).map(b => tile(b)).join('') + (doing.length > 15 ? '<div class="tile"><div class="ic">+ อีก ' + (doing.length - 15) + '</div></div>' : '') : '<div class="empty" style="grid-column:1/-1">—</div>';
   $('g-ready').innerHTML = ready.length ? cap(ready, 12).map(b => tile(b, seenPacked[b.bill] && Date.now() - seenPacked[b.bill] < 60000 && !first)).join('') : '<div class="empty" style="grid-column:1/-1">—</div>';
