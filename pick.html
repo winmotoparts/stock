@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>สแกนใบจัด · วินโมโตพาร์ท</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+  :root { --bg:#f4f5f7; --card:#fff; --ink:#1f2933; --mute:#6b7280; --line:#e5e7eb; --pri:#1d4ed8; --ok:#15803d; --warn:#b45309; --bad:#b91c1c; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; font-family:'Sarabun',sans-serif; background:var(--bg); color:var(--ink); font-size:17px; }
+  header { position:sticky; top:0; z-index:5; background:#111827; color:#fff; padding:10px 14px; display:flex; gap:10px; align-items:center; }
+  header h1 { font-size:18px; margin:0; flex:1; }
+  .seg { display:flex; background:#374151; border-radius:10px; overflow:hidden; }
+  .seg button { border:0; background:none; color:#d1d5db; padding:8px 14px; font:inherit; font-weight:600; }
+  .seg button.on { background:#fbbf24; color:#111827; }
+  main { max-width:760px; margin:0 auto; padding:12px; }
+  .box { background:var(--card); border-radius:14px; padding:14px; margin-bottom:12px; box-shadow:0 1px 3px rgba(0,0,0,.06); }
+  #reader { width:100%; border-radius:10px; overflow:hidden; }
+  .row { display:flex; gap:8px; align-items:center; }
+  input[type=text] { width:100%; font:inherit; font-size:18px; padding:12px; border:2px solid var(--line); border-radius:10px; }
+  input[type=text]:focus { outline:none; border-color:var(--pri); }
+  button.big { border:0; border-radius:12px; padding:16px 12px; font:inherit; font-size:19px; font-weight:700; color:#fff; background:var(--pri); width:100%; }
+  button.ghost { border:2px solid var(--line); background:#fff; color:var(--ink); border-radius:10px; padding:10px 14px; font:inherit; font-weight:600; }
+  .acts { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; }
+  .acts .main { grid-column:1 / -1; font-size:22px; padding:20px; }
+  .take{background:var(--pri)} .picked{background:#0e7490} .packed{background:var(--ok)} .ship{background:#7c3aed} .short{background:var(--warn)} .redo{background:var(--bad)}
+  .q { font-size:56px; font-weight:700; line-height:1; }
+  .bill { font-size:20px; font-weight:600; }
+  .chip { display:inline-block; padding:4px 12px; border-radius:999px; font-weight:700; font-size:16px; background:#e5e7eb; }
+  .st-รอจัด,.st-ยังไม่เข้าระบบ{background:#fee2e2;color:#991b1b} .st-กำลังจัด{background:#dbeafe;color:#1e40af} .st-จัดเสร็จ{background:#cffafe;color:#155e75}
+  .st-แพ็คแล้ว{background:#dcfce7;color:#166534} .st-ส่งแล้ว{background:#ede9fe;color:#5b21b6} .st-ของขาด,.st-จัดผิด{background:#fef3c7;color:#92400e}
+  .meta { color:var(--mute); margin-top:6px; line-height:1.6; }
+  .slow { color:var(--bad); font-weight:700; }
+  h2 { font-size:17px; margin:0 0 8px; }
+  .list { display:flex; flex-direction:column; gap:6px; }
+  .item { display:flex; justify-content:space-between; align-items:center; padding:10px 12px; border:1px solid var(--line); border-radius:10px; background:#fff; font:inherit; text-align:left; width:100%; }
+  .item b { font-size:20px; margin-right:8px; }
+  .item.late { border-color:var(--bad); background:#fef2f2; }
+  .modal { position:fixed; inset:0; background:rgba(0,0,0,.45); display:none; align-items:flex-end; justify-content:center; z-index:10; }
+  .modal.show { display:flex; }
+  .sheet { background:#fff; width:100%; max-width:760px; max-height:88vh; overflow:auto; border-radius:18px 18px 0 0; padding:16px; }
+  .names { display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:8px; margin:10px 0; }
+  .names button { border:2px solid var(--line); background:#fff; border-radius:12px; padding:14px 6px; font:inherit; font-size:18px; font-weight:600; }
+  .names button.last { border-color:var(--pri); background:#eff6ff; }
+  .names .g { grid-column:1 / -1; color:var(--mute); font-size:14px; margin-top:6px; }
+  .opts { display:flex; flex-wrap:wrap; gap:8px; margin:8px 0; }
+  .opts button { border:2px solid var(--line); background:#fff; border-radius:10px; padding:10px 14px; font:inherit; font-weight:600; }
+  .opts button.on { border-color:var(--pri); background:#eff6ff; color:var(--pri); }
+  #toast { position:fixed; left:50%; bottom:24px; transform:translateX(-50%); background:#111827; color:#fff; padding:12px 20px; border-radius:12px; font-weight:600; display:none; z-index:20; max-width:90%; text-align:center; }
+  #toast.err { background:var(--bad); }
+  .hint { color:var(--mute); font-size:14px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>📦 สแกนใบจัด</h1>
+  <div class="seg"><button id="stFront">หน้าร้าน</button><button id="stBack">หลังร้าน</button></div>
+</header>
+<main>
+  <div class="box">
+    <div id="reader"></div>
+    <div class="row" style="margin-top:10px">
+      <button class="ghost" id="camBtn">📷 เปิดกล้อง</button>
+      <input type="text" id="manual" placeholder="ยิงบาร์โค้ด / พิมพ์ท้ายเลขบิล แล้วกด Enter" autocomplete="off" inputmode="search">
+    </div>
+    <div class="hint" style="margin-top:6px">เครื่องยิง 2D: แตะช่องนี้ครั้งเดียว แล้วยิงได้เลย</div>
+  </div>
+
+  <div class="box" id="card" style="display:none"></div>
+
+  <div class="box"><h2 id="boardTitle">รายการค้าง</h2><div class="list" id="board"></div></div>
+</main>
+
+<div class="modal" id="modal"><div class="sheet" id="sheet"></div></div>
+<div id="toast"></div>
+
+<script>
+// ====== ตั้งค่า (แก้ 2 บรรทัดนี้) ======
+const API_URL = 'https://script.google.com/macros/s/AKfycbwSApgfF0Xwd7N7d7OXpuo1vmt2bUrnCDIk5pk47I2JytdtNDcJjlM8euroAZUXN7AJJQ/exec';
+const KEY = 'win-pick-2569';   // ต้องตรงกับ PICK_KEY ในโค้ดบอท
+// =====================================
+
+const LABEL = { take:'▶️ รับจัด', picked:'✅ จัดเสร็จ', packed:'📦 แพ็คแล้ว', ship:'🚚 ส่งแล้ว', short:'⚠️ ของขาด', redo:'🔁 จัดผิด' };
+const METHODS = ['รถร้าน', 'ขนส่ง', 'รถประจำทาง', 'รับเอง'];
+const CARRIERS = ['Kerry', 'Flash', 'J&T', 'ไปรษณีย์', 'นิ่มเอ็กซ์เพรส', 'อื่นๆ'];
+const PKGS = ['1 กล่อง', '2 กล่อง', '3 กล่อง', '1 ถุง', '1 กระสอบ', '1 มัด'];
+const store = { get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } },
+                set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
+let station = store.get('station', 'front'), staff = [], current = null, lastCode = '', lastAt = 0, cam = null, board = [], slowMin = 15;
+
+const $ = id => document.getElementById(id);
+function toast(t, err) { const el = $('toast'); el.textContent = t; el.className = err ? 'err' : ''; el.style.display = 'block'; clearTimeout(el._t); el._t = setTimeout(() => el.style.display = 'none', err ? 3500 : 2000); }
+function beep(ok) { try { const a = new (window.AudioContext || window.webkitAudioContext)(), o = a.createOscillator(), g = a.createGain(); o.frequency.value = ok ? 880 : 220; o.connect(g); g.connect(a.destination); g.gain.value = .15; o.start(); setTimeout(() => { o.stop(); a.close(); }, 130); } catch (e) {} }
+function mins(t) { return t ? Math.floor((Date.now() - t) / 60000) : null; }
+function hm(t) { if (!t) return ''; const d = new Date(t); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c])); }
+function shortBill(b) { return String(b || '').replace(/^SO\d{4}-0*/, ''); }
+
+async function api(params) {
+  if (/ตรงนี้/.test(API_URL)) { toast('ยังไม่ได้ใส่ลิงก์ API_URL ใน pick.html', true); throw new Error('no url'); }
+  const q = new URLSearchParams(Object.assign({ key: KEY }, params));
+  const res = await fetch(API_URL + '?' + q.toString());
+  return res.json();
+}
+
+function setStation(s) {
+  station = s; store.set('station', s);
+  $('stFront').className = s === 'front' ? 'on' : ''; $('stBack').className = s === 'back' ? 'on' : '';
+  $('boardTitle').textContent = s === 'front' ? 'รอจัด / กำลังจัด' : 'รอเช็ค · แพ็คแล้วรอส่ง';
+  renderBoard(); if (current) renderCard(current);
+}
+$('stFront').onclick = () => setStation('front');
+$('stBack').onclick = () => setStation('back');
+
+// ---------- สแกน ----------
+async function onCode(code) {
+  code = String(code || '').trim();
+  if (!code) return;
+  if (code === lastCode && Date.now() - lastAt < 4000) return;   // กันสแกนซ้ำรัวๆ
+  lastCode = code; lastAt = Date.now();
+  beep(true);
+  $('card').style.display = 'block'; $('card').innerHTML = '<div class="hint">กำลังค้นหา…</div>';
+  try {
+    const r = await api({ api: 'bill', q: code });
+    if (!r.ok) { beep(false); toast(r.err, true); $('card').style.display = 'none'; return; }
+    current = Object.assign(r.bill, { code: code, isNew: !!r.isNew });
+    renderCard(current);
+  } catch (e) { if (e.message !== 'no url') toast('เชื่อมต่อไม่ได้ ตรวจอินเทอร์เน็ต', true); }
+}
+$('manual').addEventListener('keydown', e => { if (e.key === 'Enter') { const v = e.target.value; e.target.value = ''; onCode(v); } });
+
+async function toggleCam() {
+  if (cam) { await cam.stop().catch(() => {}); cam = null; $('camBtn').textContent = '📷 เปิดกล้อง'; $('reader').innerHTML = ''; return; }
+  cam = new Html5Qrcode('reader');
+  try {
+    await cam.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 240, height: 240 } }, txt => onCode(txt), () => {});
+    $('camBtn').textContent = '⏹ ปิดกล้อง'; store.set('cam', '1');
+  } catch (e) { cam = null; toast('เปิดกล้องไม่ได้: อนุญาตกล้องในเบราว์เซอร์ก่อน', true); }
+}
+$('camBtn').onclick = toggleCam;
+
+// ---------- การ์ดบิล ----------
+function renderCard(b) {
+  const late = b.taken && !b.picked && mins(b.taken) >= slowMin;
+  const order = station === 'front' ? ['take', 'picked', 'short', 'packed'] : ['picked', 'packed', 'ship', 'redo', 'short', 'take'];
+  const acts = order.filter(a => (b.acts || []).includes(a));
+  $('card').innerHTML =
+    '<div class="row" style="justify-content:space-between;align-items:flex-start">' +
+      '<div><div class="q">' + esc(b.queue || shortBill(b.bill)) + '</div><div class="bill">' + esc(b.bill) + (b.items ? ' · ' + esc(b.items) + ' รายการ' : '') + '</div></div>' +
+      '<span class="chip st-' + esc(b.status) + '">' + esc(b.status) + '</span></div>' +
+    '<div class="meta">' +
+      (b.picker ? '👷 จัด: <b>' + esc(b.picker) + '</b>' + (b.taken ? ' · รับ ' + hm(b.taken) : '') + (b.picked ? ' · เสร็จ ' + hm(b.picked) : (b.taken ? ' · <span class="' + (late ? 'slow' : '') + '">' + mins(b.taken) + ' นาที</span>' : '')) + '<br>' : '') +
+      (b.checker ? '✔️ เช็ค/แพ็ค: <b>' + esc(b.checker) + '</b> ' + hm(b.packed) + (b.pkg ? ' · ' + esc(b.pkg) : '') + '<br>' : '') +
+      (b.method ? '🚚 ' + esc(b.method) + '<br>' : '') + (b.errors ? '🔁 จัดผิด ' + b.errors + ' ครั้ง<br>' : '') + (b.note ? '💬 ' + esc(b.note) : '') +
+    '</div>' +
+    (acts.length ? '<div class="acts">' + acts.map((a, i) => '<button class="big ' + a + (i === 0 ? ' main' : '') + '" data-a="' + a + '">' + LABEL[a] + '</button>').join('') + '</div>'
+      : '<div class="meta">✅ บิลนี้ปิดแล้ว</div>');
+  $('card').querySelectorAll('[data-a]').forEach(el => el.onclick = () => openAction(el.dataset.a));
+}
+
+// ---------- เลือกชื่อ + ข้อมูลเพิ่ม ----------
+function openAction(a) {
+  const prefer = station === 'front' ? /จัด/ : /เช็ค|แพ็ค/;
+  const groups = {};
+  staff.forEach(s => (groups[s.grp || 'อื่นๆ'] = groups[s.grp || 'อื่นๆ'] || []).push(s));
+  const gNames = Object.keys(groups).sort((x, y) => (prefer.test(y) ? 1 : 0) - (prefer.test(x) ? 1 : 0));
+  const lastUid = store.get('last_' + station + '_' + a, store.get('last_' + station, ''));
+  const lastS = staff.find(s => s.uid === lastUid);
+  let extra = '';
+  if (a === 'packed') extra = '<h2>จำนวนหีบห่อ</h2><div class="opts" id="pkgOpts">' + PKGS.map(p => '<button>' + p + '</button>').join('') + '</div>' +
+    '<input type="text" id="pkgIn" placeholder="หรือพิมพ์ เช่น 2 กล่อง 1 กระสอบ">';
+  if (a === 'ship') extra = '<h2>วิธีส่ง</h2><div class="opts" id="mOpts">' + METHODS.map(m => '<button' + (m === current.method ? ' class="on"' : '') + '>' + m + '</button>').join('') + '</div>' +
+    '<div id="shipMore" style="display:none"><div class="opts" id="cOpts">' + CARRIERS.map(c => '<button>' + c + '</button>').join('') + '</div><input type="text" id="trackIn" placeholder="เลขพัสดุ (ถ้ามี)"></div>';
+  if (a === 'short' || a === 'redo') extra = '<h2>' + (a === 'short' ? 'ขาดอะไร' : 'ผิดอะไร') + '</h2><input type="text" id="noteIn" placeholder="' + (a === 'short' ? 'รหัส/ชื่อสินค้าที่ขาด' : 'เช่น หยิบผิดรุ่น 10011') + '">';
+  $('sheet').innerHTML = '<div class="row" style="justify-content:space-between"><h2 style="margin:0">' + LABEL[a] + ' · คิว ' + esc(current.queue || shortBill(current.bill)) + '</h2><button class="ghost" id="xBtn">✕</button></div>' +
+    extra + '<h2 style="margin-top:12px">ใครทำ? (แตะชื่อเพื่อบันทึก)</h2><div class="names">' +
+    (lastS ? '<button class="last" data-u="' + lastS.uid + '">⭐ ' + esc(lastS.name) + '</button>' : '') +
+    gNames.map(g => '<div class="g">' + esc(g) + '</div>' + groups[g].map(s => '<button data-u="' + s.uid + '">' + esc(s.name) + '</button>').join('')).join('') + '</div>';
+  $('modal').classList.add('show');
+  $('xBtn').onclick = closeModal;
+  const pick = (box, inp) => box && box.querySelectorAll('button').forEach(btn => btn.onclick = () => {
+    box.querySelectorAll('button').forEach(x => x.classList.remove('on')); btn.classList.add('on'); if (inp) inp.value = btn.textContent;
+    if (box.id === 'mOpts') $('shipMore').style.display = btn.textContent === 'ขนส่ง' ? 'block' : 'none';
+  });
+  pick($('pkgOpts'), $('pkgIn')); pick($('mOpts')); pick($('cOpts'));
+  $('sheet').querySelectorAll('[data-u]').forEach(el => el.onclick = () => submit(a, el.dataset.u));
+}
+function closeModal() { $('modal').classList.remove('show'); setTimeout(() => $('manual').focus(), 100); }
+$('modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
+
+async function submit(a, uid, force) {
+  const p = { api: 'act', q: current.code || current.bill, a: a, uid: uid };
+  if (a === 'packed') p.pkg = ($('pkgIn') || {}).value || '';
+  if (a === 'ship') {
+    const m = document.querySelector('#mOpts .on'); if (!m) return toast('เลือกวิธีส่งก่อน', true);
+    p.method = m.textContent; const c = document.querySelector('#cOpts .on'); if (c && p.method === 'ขนส่ง') p.carrier = c.textContent;
+    p.track = ($('trackIn') || {}).value || '';
+  }
+  if (a === 'short' || a === 'redo') { p.note = ($('noteIn') || {}).value || ''; if (!p.note.trim()) return toast('พิมพ์รายละเอียดก่อน', true); }
+  if (force) p.force = '1';
+  try {
+    const r = await api(p);
+    if (!r.ok && r.confirm) { if (confirm(r.err)) return submit(a, uid, true); return; }
+    if (!r.ok) { beep(false); return toast(r.err, true); }
+    store.set('last_' + station + '_' + a, uid); store.set('last_' + station, uid);
+    const who = (staff.find(s => s.uid === uid) || {}).name || '';
+    beep(true); toast(LABEL[a].replace(/^\S+\s/, '') + ' · คิว ' + (r.bill.queue || shortBill(r.bill.bill)) + ' · ' + who);
+    current = Object.assign(r.bill, { code: current.code }); renderCard(current); closeModal(); loadBoard();
+    setTimeout(() => { if (current && current.bill === r.bill.bill) { $('card').style.display = 'none'; current = null; } }, 6000);
+  } catch (e) { if (e.message !== 'no url') toast('บันทึกไม่สำเร็จ ลองอีกครั้ง', true); }
+}
+
+// ---------- รายการค้าง ----------
+async function loadBoard() {
+  try { const r = await api({ api: 'board' }); if (r.ok) { board = r.board; slowMin = r.slow || 15; renderBoard(); } } catch (e) {}
+}
+function renderBoard() {
+  const want = station === 'front' ? ['รอจัด', 'จัดผิด', 'ของขาด', 'กำลังจัด'] : ['จัดเสร็จ', 'กำลังจัด', 'แพ็คแล้ว', 'จัดผิด', 'ของขาด'];
+  const list = board.filter(b => want.includes(b.status)).sort((x, y) => want.indexOf(x.status) - want.indexOf(y.status) || (x.taken || x.created) - (y.taken || y.created));
+  $('board').innerHTML = list.length ? list.map(b => {
+    const late = b.status === 'กำลังจัด' && mins(b.taken) >= slowMin;
+    return '<button class="item' + (late ? ' late' : '') + '" data-b="' + esc(b.bill) + '"><span><b>' + esc(b.queue || shortBill(b.bill)) + '</b>' + esc(b.picker || '') +
+      (b.status === 'กำลังจัด' && b.taken ? ' · ' + mins(b.taken) + ' นาที' : '') + '</span><span class="chip st-' + esc(b.status) + '">' + esc(b.status) + '</span></button>';
+  }).join('') : '<div class="hint">ไม่มีรายการค้าง 🎉</div>';
+  $('board').querySelectorAll('[data-b]').forEach(el => el.onclick = () => { lastCode = ''; onCode(el.dataset.b); window.scrollTo({ top: 0, behavior: 'smooth' }); });
+}
+
+// ---------- เริ่ม ----------
+(async function init() {
+  setStation(station);
+  try { const r = await api({ api: 'staff' }); if (r.ok) staff = r.staff; else toast(r.err, true); } catch (e) {}
+  loadBoard(); setInterval(loadBoard, 20000);
+  if (store.get('cam', '') === '1') toggleCam();
+  $('manual').focus();
+})();
+</script>
+</body>
+</html>
