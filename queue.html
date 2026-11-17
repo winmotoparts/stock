@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>จอคิว · วินโมโตพาร์ท</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* ออกแบบสำหรับทีวีแนวนอน ใช้หน่วย vw/vh ให้ขนาดตามจอ */
+  * { box-sizing:border-box; margin:0; }
+  html, body { height:100%; overflow:hidden; background:#0b1220; color:#e5e7eb; font-family:'Sarabun',sans-serif; }
+  header { height:9vh; display:flex; align-items:center; padding:0 2vw; background:#111a2e; gap:2vw; }
+  header h1 { font-size:3.4vh; font-weight:800; flex:1; }
+  #clock { font-size:4.2vh; font-weight:800; color:#fbbf24; }
+  #net { font-size:2vh; color:#94a3b8; }
+  #net.bad { color:#f87171; font-weight:700; }
+  footer { height:6vh; line-height:6vh; padding:0 2vw; background:#111a2e; font-size:2.3vh; color:#cbd5e1; white-space:nowrap; overflow:hidden; }
+  footer b { color:#fff; }
+  main { height:85vh; display:grid; gap:1vw; padding:1vw; }
+  .col { background:#131c31; border-radius:1vw; display:flex; flex-direction:column; overflow:hidden; }
+  .col h2 { font-size:3vh; padding:1.2vh 1vw; display:flex; justify-content:space-between; align-items:center; }
+  .col h2 .n { background:rgba(255,255,255,.15); border-radius:99px; padding:0 1.2vw; }
+  .cards { flex:1; overflow:hidden; padding:0 .8vw .8vw; display:flex; flex-direction:column; gap:.8vh; }
+  .more { text-align:center; color:#94a3b8; font-size:2.2vh; padding:.5vh; }
+
+  /* ---------- หลังร้าน ---------- */
+  .back main { grid-template-columns:repeat(4,1fr); }
+  .h-wait{background:#7f1d1d} .h-doing{background:#1e3a8a} .h-picked{background:#155e75} .h-packed{background:#166534}
+  .card { background:#1e293b; border-radius:.8vw; padding:.9vh .8vw; display:grid; grid-template-columns:auto 1fr; column-gap:.8vw; align-items:center; border-left:.5vw solid #475569; }
+  .card .q { font-size:6vh; font-weight:800; line-height:1; min-width:4.5vw; text-align:center; grid-row:span 2; }
+  .card .t { font-size:2.2vh; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .card .s { font-size:2.1vh; color:#cbd5e1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .lv1{border-left-color:#ef4444} .lv2{border-left-color:#f97316} .lv3{border-left-color:#eab308} .lv4{border-left-color:#3b82f6} .lv5{border-left-color:#a855f7} .lv6{border-left-color:#64748b}
+  .card.late { background:#7f1d1d; animation:pulse 1.4s infinite; }
+  .card.late .s { color:#fecaca; font-weight:700; }
+  .card.warn { color:#fde68a; }
+  @keyframes pulse { 50% { background:#450a0a; } }
+
+  /* ---------- หน้าร้าน ---------- */
+  .front main { grid-template-columns:1fr 1.25fr; }
+  .front .h-doing { background:#1e3a8a; } .front .h-ready { background:#166534; }
+  .front .col h2 { font-size:4.2vh; justify-content:center; padding:1.6vh; }
+  .grid { flex:1; display:grid; grid-template-columns:repeat(3,1fr); grid-auto-rows:13vh; gap:1vh; padding:1vh; align-content:start; overflow:hidden; }
+  .ready .grid { grid-template-columns:repeat(3,1fr); grid-auto-rows:15vh; }
+  .tile { background:#1e293b; border-radius:1vw; display:flex; flex-direction:column; align-items:center; justify-content:center; line-height:1; }
+  .tile .q { font-size:8vh; font-weight:800; }
+  .tile .ic { font-size:2.4vh; margin-top:.6vh; color:#cbd5e1; }
+  .ready .tile { background:#14532d; }
+  .ready .tile .q { font-size:10vh; color:#bbf7d0; }
+  .tile.new { animation:flash 1s 8; }
+  @keyframes flash { 50% { background:#fbbf24; } }
+  #call { position:fixed; inset:0; background:rgba(5,10,20,.85); display:none; align-items:center; justify-content:center; flex-direction:column; z-index:9; }
+  #call.show { display:flex; }
+  #call .a { font-size:6vh; color:#fbbf24; font-weight:800; }
+  #call .b { font-size:30vh; font-weight:800; line-height:1; color:#fff; }
+  #call .c { font-size:5vh; font-weight:700; }
+
+  #start { position:fixed; inset:0; background:#0b1220; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3vh; z-index:10; }
+  #start button { font:inherit; font-size:4vh; font-weight:800; padding:2vh 4vw; border-radius:1.5vw; border:0; background:#fbbf24; color:#111; }
+  #start p { font-size:2.5vh; color:#94a3b8; text-align:center; }
+  .empty { color:#64748b; font-size:2.6vh; text-align:center; padding:3vh 0; }
+</style>
+</head>
+<body>
+<div id="start">
+  <div style="font-size:5vh;font-weight:800">📺 จอคิว วินโมโตพาร์ท</div>
+  <button id="go">กด OK เพื่อเริ่ม (เปิดเสียง)</button>
+  <p>เบราว์เซอร์ต้องให้กดหนึ่งครั้งก่อนถึงจะเล่นเสียงได้<br>ลิงก์: ?view=back = หลังร้าน · ?view=front = หน้าร้าน</p>
+</div>
+<header><h1 id="title">จอคิว</h1><span id="net">กำลังเชื่อมต่อ…</span><span id="clock">--:--</span></header>
+<main id="main"></main>
+<footer id="foot"></footer>
+<div id="call"><div class="a">เชิญรับสินค้า</div><div class="b" id="callQ"></div><div class="c" id="callT"></div></div>
+
+<script>
+// ====== ตั้งค่า (ใช้ค่าเดียวกับ pick.html) ======
+const API_URL = 'https://script.google.com/macros/s/AKfycbwSApgfF0Xwd7N7d7OXpuo1vmt2bUrnCDIk5pk47I2JytdtNDcJjlM8euroAZUXN7AJJQ/exec';
+const KEY = 'win-pick-2569';
+const REFRESH_SEC = 15;                                   // ดึงข้อมูลใหม่ทุกกี่วินาที
+const CALL_TYPES = ['retail', 'tech', 'later', 'other'];  // หน้าร้าน: ประเภทที่ "ประกาศเรียก" เมื่อแพ็คเสร็จ (ลูกค้ามารับเอง) — ประเภทอื่นแค่ขึ้นจอ ไม่เรียก
+const SPEAK = true;                                       // true = พูดเลขคิว (ถ้าทีวีมีเสียงภาษาไทย) / false = แค่เสียงกริ่ง
+// ==============================================
+
+const VIEW = /view=front/.test(location.search) ? 'front' : 'back';
+document.body.className = VIEW;
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]));
+const mins = t => t ? Math.floor((Date.now() - t) / 60000) : null;
+const hm = t => { if (!t) return ''; const d = new Date(t); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+const qn = b => b.queue || String(b.bill || '').replace(/^[A-Z]+\d{4}-0*/, '');
+const lv = b => b.type ? b.type.lvl : 9;
+let board = [], slowMin = 15, first = true, seenPacked = {}, seenLate = {}, audio = null, failCount = 0;
+
+function lateInfo(b) {
+  const a = b.alert || {}, done = ['แพ็คแล้ว', 'ส่งแล้ว', 'ยกเลิก'].includes(b.status);
+  if (a.mode === 'wait') { const m = mins(b.created); return { late: !done && m !== null && m >= a.min, text: done || m === null ? '' : 'รอ ' + m + ' นาที' }; }
+  if (a.mode === 'due') return { late: !done && Date.now() >= a.at, soon: !done && Date.now() >= a.at - 30 * 60000, text: done ? '' : 'แพ็คก่อน ' + hm(a.at) };
+  return { late: false, text: a.note || '' };
+}
+
+// ---------- เสียง ----------
+function chime(n) {
+  try {
+    if (!audio) audio = new (window.AudioContext || window.webkitAudioContext)();
+    [784, 659].concat(n > 1 ? [784, 659] : []).forEach((f, i) => {
+      const o = audio.createOscillator(), g = audio.createGain(), t = audio.currentTime + i * 0.45;
+      o.frequency.value = f; o.type = 'sine'; o.connect(g); g.connect(audio.destination);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.4, t + 0.03); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.42);
+      o.start(t); o.stop(t + 0.45);
+    });
+  } catch (e) {}
+}
+function say(text) {
+  if (!SPEAK || !window.speechSynthesis) return;
+  try {
+    const u = new SpeechSynthesisUtterance(text); u.lang = 'th-TH'; u.rate = 0.9;
+    const v = speechSynthesis.getVoices().find(x => /^th/i.test(x.lang)); if (v) u.voice = v; else return;   // ไม่มีเสียงไทย = ใช้แค่กริ่ง
+    setTimeout(() => speechSynthesis.speak(u), 1000);
+  } catch (e) {}
+}
+let callQ = [], calling = false;
+function announce(b) { callQ.push(b); if (!calling) nextCall(); }
+function nextCall() {
+  const b = callQ.shift(); if (!b) { calling = false; $('call').classList.remove('show'); return; }
+  calling = true;
+  $('callQ').textContent = qn(b); $('callT').textContent = b.type ? b.type.icon + ' ' + b.type.label : '';
+  $('call').classList.add('show'); chime(2); say('เชิญคิวที่ ' + qn(b) + ' รับสินค้าค่ะ');
+  setTimeout(nextCall, 6000);
+}
+
+// ---------- ดึงข้อมูล ----------
+async function load() {
+  if (/ตรงนี้/.test(API_URL)) { $('net').textContent = 'ยังไม่ได้ใส่ลิงก์ API_URL ใน queue.html'; $('net').className = 'bad'; return; }
+  try {
+    const res = await fetch(API_URL + '?api=board&key=' + encodeURIComponent(KEY) + '&t=' + Date.now());
+    const r = await res.json();
+    if (!r.ok) throw new Error(r.err || 'error');
+    board = r.board; slowMin = r.slow || 15; failCount = 0;
+    $('net').textContent = 'อัปเดต ' + hm(Date.now()); $('net').className = '';
+    detect(); render(); first = false;
+  } catch (e) {
+    failCount++;
+    $('net').textContent = failCount > 2 ? '⚠️ เชื่อมต่อไม่ได้ (ตรวจ Wi-Fi)' : 'กำลังลองใหม่…'; $('net').className = failCount > 2 ? 'bad' : '';
+  }
+}
+
+// มีอะไรใหม่ตั้งแต่รอบที่แล้ว → เสียง
+function detect() {
+  if (VIEW === 'front') {
+    board.filter(b => b.status === 'แพ็คแล้ว').forEach(b => {
+      if (seenPacked[b.bill]) return;
+      seenPacked[b.bill] = first ? 1 : Date.now();   // รอบแรก = ของเก่า ไม่กะพริบ/ไม่เรียก
+      if (!first && CALL_TYPES.includes(b.type ? b.type.key : 'other')) announce(b);
+    });
+  } else {
+    const nowLate = board.filter(b => !['แพ็คแล้ว', 'ส่งแล้ว'].includes(b.status) && lateInfo(b).late);
+    const fresh = nowLate.filter(b => !seenLate[b.bill]);
+    nowLate.forEach(b => seenLate[b.bill] = 1);
+    if (fresh.length && !first) {
+      chime(1);
+      const b = fresh.sort((x, y) => lv(x) - lv(y))[0];
+      say('คิว ' + qn(b) + ' ' + (b.type ? b.type.label : '') + ' เกินเวลา');
+    }
+    const fresh2 = board.filter(b => b.status === 'รอจัด' && !seenPacked['n' + b.bill]);
+    fresh2.forEach(b => seenPacked['n' + b.bill] = 1);
+    if (!first && fresh2.some(b => lv(b) <= 2)) chime(1);   // บิลด่วน/ช่างเข้าใหม่ ติ๊งหนึ่งครั้ง
+  }
+}
+
+// ---------- วาดจอ ----------
+function fit(list, el, maker, rowsPx) {
+  // แสดงเท่าที่จอพอ ที่เหลือบอกจำนวน
+  const max = Math.max(1, Math.floor(el.clientHeight / rowsPx));
+  return list.slice(0, max).map(maker).join('') + (list.length > max ? '<div class="more">+ อีก ' + (list.length - max) + ' บิล</div>' : '');
+}
+function sortQ(list) {
+  return list.map(b => Object.assign(b, { li: lateInfo(b) }))
+    .sort((x, y) => (y.li.late - x.li.late) || lv(x) - lv(y) || (x.created || 0) - (y.created || 0));
+}
+
+function renderBack() {
+  const cols = [
+    { k: 'wait', title: '🔴 รอจัด', st: ['รอจัด', 'ของขาด', 'จัดผิด'] },
+    { k: 'doing', title: '👷 กำลังจัด', st: ['กำลังจัด'] },
+    { k: 'picked', title: '🔍 รอเช็ค', st: ['จัดเสร็จ'] },
+    { k: 'packed', title: '📦 แพ็คแล้ว รอส่ง', st: ['แพ็คแล้ว'] },
+  ];
+  if (!$('main').children.length)
+    $('main').innerHTML = cols.map(c => '<div class="col"><h2 class="h-' + c.k + '">' + c.title + '<span class="n" id="n-' + c.k + '">0</span></h2><div class="cards" id="c-' + c.k + '"></div></div>').join('');
+  cols.forEach(c => {
+    const list = sortQ(board.filter(b => c.st.includes(b.status)));
+    $('n-' + c.k).textContent = list.length;
+    const el = $('c-' + c.k);
+    const rowPx = el.clientHeight ? Math.max(60, window.innerHeight * 0.108) : 80;
+    el.innerHTML = list.length ? fit(list, el, b => {
+      let sub;
+      if (c.k === 'wait') sub = (b.status !== 'รอจัด' ? '⚠️ ' + b.status + ' · ' : '') + (b.li.text || ('เข้า ' + hm(b.created)));
+      else if (c.k === 'doing') { const m = mins(b.taken); sub = '👷 ' + (b.picker || '-') + (m !== null ? ' · ' + m + ' นาที' : ''); if (m >= slowMin) b.li.late = true; }
+      else if (c.k === 'picked') sub = 'จัด: ' + (b.picker || '-') + (b.li.text ? ' · ' + b.li.text : '');
+      else sub = '✔️ ' + (b.checker || '-') + (b.pkg ? ' · ' + b.pkg : '') + (b.type && b.type.lvl >= 4 && b.alert && b.alert.note ? ' · ' + b.alert.note : '');
+      return '<div class="card lv' + lv(b) + (b.li.late ? ' late' : b.li.soon ? ' warn' : '') + '"><div class="q">' + esc(qn(b)) + '</div>' +
+        '<div class="t">' + (b.type ? b.type.icon + ' ' + esc(b.type.label) : '') + (b.items ? ' · ' + esc(b.items) + ' รายการ' : '') + '</div>' +
+        '<div class="s">' + (b.li.late ? '⏰ ' : '') + esc(sub) + '</div></div>';
+    }, rowPx) : '<div class="empty">—</div>';
+  });
+  // ท้ายจอ: ส่งแล้ววันนี้ + จัดวันนี้รายคน
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const done = board.filter(b => b.status === 'ส่งแล้ว' && b.shipped >= today.getTime());
+  const by = {}; board.filter(b => b.picked >= today.getTime() && b.picker).forEach(b => by[b.picker] = (by[b.picker] || 0) + 1);
+  const late = board.filter(b => b.li && b.li.late).length;
+  $('foot').innerHTML = '✅ ส่งแล้ววันนี้ <b>' + done.length + '</b> บิล' + (late ? ' · <b style="color:#f87171">⏰ เกินเวลา ' + late + '</b>' : '') +
+    (Object.keys(by).length ? ' · จัดวันนี้: ' + Object.keys(by).sort((a, b) => by[b] - by[a]).map(n => esc(n) + ' <b>' + by[n] + '</b>').join(' · ') : '');
+}
+
+function renderFront() {
+  if (!$('main').children.length)
+    $('main').innerHTML = '<div class="col"><h2 class="h-doing">⏳ กำลังเตรียมสินค้า</h2><div class="grid" id="g-doing"></div></div>' +
+      '<div class="col ready"><h2 class="h-ready">✅ พร้อมรับสินค้า</h2><div class="grid" id="g-ready"></div></div>';
+  const tile = (b, isNew) => '<div class="tile' + (isNew ? ' new' : '') + '"><div class="q">' + esc(qn(b)) + '</div><div class="ic">' + (b.type ? b.type.icon + ' ' + esc(b.type.label) : '') + '</div></div>';
+  const doing = board.filter(b => ['รอจัด', 'กำลังจัด', 'จัดเสร็จ', 'ของขาด', 'จัดผิด'].includes(b.status))
+    .sort((x, y) => (Number(x.queue) || 9999) - (Number(y.queue) || 9999) || (x.created || 0) - (y.created || 0));
+  const ready = board.filter(b => b.status === 'แพ็คแล้ว').sort((x, y) => (y.packed || 0) - (x.packed || 0));   // แพ็คล่าสุดอยู่บน
+  const cap = (list, n) => list.slice(0, n);
+  $('g-doing').innerHTML = doing.length ? cap(doing, 15).map(b => tile(b)).join('') + (doing.length > 15 ? '<div class="tile"><div class="ic">+ อีก ' + (doing.length - 15) + '</div></div>' : '') : '<div class="empty" style="grid-column:1/-1">—</div>';
+  $('g-ready').innerHTML = ready.length ? cap(ready, 12).map(b => tile(b, seenPacked[b.bill] && Date.now() - seenPacked[b.bill] < 60000 && !first)).join('') : '<div class="empty" style="grid-column:1/-1">—</div>';
+  $('foot').innerHTML = 'ฟังเสียงเรียกเลขคิวของท่าน · เลขคิวอยู่บนใบรับสินค้า';
+}
+
+function render() { VIEW === 'front' ? renderFront() : renderBack(); }
+
+function tick() { const d = new Date(); $('clock').textContent = hm(d.getTime()); }
+
+$('title').textContent = VIEW === 'front' ? '📢 คิวรับสินค้า · วินโมโตพาร์ท' : '📦 คิวจัดสินค้า · หลังร้าน';
+$('go').onclick = () => {
+  $('start').style.display = 'none'; chime(1);
+  try { speechSynthesis.getVoices(); } catch (e) {}
+  try { document.documentElement.requestFullscreen && document.documentElement.requestFullscreen().catch(() => {}); } catch (e) {}
+  try { navigator.wakeLock && navigator.wakeLock.request('screen').catch(() => {}); } catch (e) {}   // กันจอดับ (ถ้าเบราว์เซอร์รองรับ)
+};
+$('go').focus();
+setInterval(tick, 1000); tick();
+load(); setInterval(load, REFRESH_SEC * 1000);
+setInterval(render, 30000);                                     // อัปเดตนาทีที่รอ แม้ข้อมูลไม่เปลี่ยน
+setTimeout(() => location.reload(), 6 * 3600 * 1000);           // รีโหลดตัวเองทุก 6 ชม. กันค้าง
+</script>
+</body>
+</html>
