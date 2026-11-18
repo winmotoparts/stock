@@ -109,7 +109,7 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbwSApgfF0Xwd7N7d7OXpuo1
 const KEY = 'win-pick-2569';   // ต้องตรงกับ PICK_KEY ในโค้ดบอท
 // =====================================
 
-const LABEL = { next:'▶️ รับบิลถัดไป', heavy:'💪 ของหนัก ส่งต่อ', queue:'📥 ส่งเข้าคิวจัด', front:'🏁 จบที่หน้าร้าน', take:'▶️ รับจัด', picked:'✅ จัดเสร็จ', packed:'📦 แพ็คแล้ว', ship:'🚚 ส่งแล้ว', short:'⚠️ ของขาด', redo:'🔁 จัดผิด' };
+const LABEL = { undo:'↩️ กดผิด ย้อนกลับเข้าคิว', next:'▶️ รับบิลถัดไป', heavy:'💪 ของหนัก ส่งต่อ', queue:'📥 ส่งเข้าคิวจัด', front:'🏁 จบที่หน้าร้าน', take:'▶️ รับจัด', picked:'✅ จัดเสร็จ', packed:'📦 แพ็คแล้ว', ship:'🚚 ส่งแล้ว', short:'⚠️ ของขาด', redo:'🔁 จัดผิด' };
 const METHODS = ['รถร้าน', 'ขนส่ง', 'รถประจำทาง', 'รับเอง'];
 const CARRIERS = ['KERRY', 'FLASH', 'J&T', 'ไปรษณีย์ไทย', 'SPX', 'เจ้สั้น', 'รถตู้', 'รถบัส', 'อื่นๆ'];
 const PKGS = ['1 กล่อง', '2 กล่อง', '3 กล่อง', '1 ถุง', '1 กระสอบ', '1 มัด'];
@@ -139,7 +139,7 @@ function openDevice() {
   $('sheet').querySelectorAll('[data-me]').forEach(el => el.onclick = () => { store.set('dev', 'me:' + el.dataset.me); renderWho(); closeModal(); toast('เครื่องนี้เป็นของ ' + me().name); });
 }
 $('whoBtn').onclick = () => openDevice();
-let heavyFlag = false;
+let heavyFlag = false, simple = false;
 // เกินเวลาไหม: ด่วน/ช่าง/ส่งใกล้ = รอเกิน X นาที (ยังไม่แพ็ค) · รถร้าน/ขนส่ง = เลยเวลาที่ต้องแพ็คเสร็จ
 function lateInfo(b) {
   const a = b.alert || {}, done = ['แพ็คแล้ว', 'ส่งแล้ว', 'ยกเลิก'].includes(b.status);
@@ -147,7 +147,11 @@ function lateInfo(b) {
   if (a.mode === 'due') return { late: !done && Date.now() >= a.at, text: done ? '' : 'แพ็คก่อน ' + hm(a.at) + (a.note ? ' (' + a.note + ')' : '') };
   return { late: false, text: a.note || '' };
 }
-function lbl(a, b) { return a === 'ship' && b && b.method === 'รับเอง' ? '✅ ลูกค้ารับแล้ว' : LABEL[a]; }
+function lbl(a, b) {
+  if (a === 'ship' && b && b.method === 'รับเอง') return '✅ ลูกค้ารับแล้ว';
+  if (a === 'front' && b && b.picker && ['จัดเสร็จ', 'กำลังจัด'].includes(b.status)) return '✅ เช็คแล้ว ส่งมอบลูกค้า';
+  return LABEL[a];
+}
 function shortBill(b) { return String(b || '').replace(/^SO\d{4}-0*/, ''); }
 
 async function api(params) {
@@ -205,7 +209,8 @@ $('camBtn').onclick = toggleCam;
 function renderCard(b) {
   const late = b.taken && !b.picked && mins(b.taken) >= slowMin, li = lateInfo(b);
   const order = station !== 'front' ? ['picked', 'packed', 'ship', 'redo', 'short', 'take']
-    : (b.acts || []).includes('queue') ? ['queue', 'front', 'take', 'picked']           // บิลใหม่: พนักงานขายเลือก เข้าคิว / จบหน้าร้าน
+    : b.status === 'จัดเสร็จ' ? ['front', 'packed', 'redo']                              // ลูกค้ารีบ: หน้าร้านเช็คเองแล้วส่งมอบ
+    : (b.acts || []).includes('queue') ? ['queue', 'front']                             // บิลใหม่: หน้าร้านเลือกแค่ เข้าคิว / จบหน้าร้าน (กันกดจัดเสร็จผิด)
     : ['take', 'picked', 'short', 'packed', 'front', 'heavy'];                          // คนจัด: ปุ่มหลักคือ รับจัด / จัดเสร็จ
   const acts = order.filter(a => (b.acts || []).includes(a));
   if (station === 'front' && (b.acts || []).includes('ship') && !acts.includes('ship')) acts.unshift('ship');
@@ -234,14 +239,22 @@ function renderCard(b) {
     $('card').appendChild(t);
   }
   $('card').querySelectorAll('[data-a]').forEach(el => el.onclick = () => el.dataset.a === 'queue' ? submit('queue', '') : openAction(el.dataset.a));
+  if (b.undo) {
+    const u = document.createElement('button'); u.className = 'ghost'; u.style.cssText = 'width:100%;margin-top:10px;color:#b91c1c';
+    u.textContent = LABEL.undo; u.onclick = () => { if (confirm('ย้อนคิว ' + (b.queue || shortBill(b.bill)) + ' กลับเป็น "รอจัด"?\n(ล้างชื่อคนจัด/เช็ค/ส่ง ของบิลนี้)')) openAction('undo'); };
+    $('card').appendChild(u);
+  }
   if ($('quick')) { $('quick').onclick = () => submit('ship', quickS.uid, false, true); $('quickOther').onclick = () => openAction('ship'); }
 }
 
 // ---------- เลือกชื่อ + ข้อมูลเพิ่ม ----------
 function openAction(a) {
   const mine = me();
-  const needInput = ['packed', 'short', 'redo'].includes(a) || (a === 'ship' && !(current && current.method === 'รับเอง'));
-  if (mine && !needInput) return submit(a, mine.uid, false, a === 'ship');   // มือถือส่วนตัว: กดแล้วบันทึกเลย
+  const needInput = ['short', 'redo'].includes(a) || (a === 'packed' && !simple) || (a === 'ship' && !(current && current.method === 'รับเอง'));
+  if (mine && !needInput) {   // มือถือส่วนตัว: กดแล้วบันทึกเลย (ขั้นที่ปิดงาน ถามยืนยันก่อน)
+    if (['picked', 'front', 'ship'].includes(a) && !confirm('ยืนยัน: ' + mine.name + ' · ' + lbl(a, current).replace(/^\S+\s/, '') + ' · คิว ' + (current.queue || shortBill(current.bill)) + ' ?')) return;
+    return submit(a, mine.uid, false, a === 'ship');
+  }
   const prefer = station === 'front' ? /จัด/ : /เช็ค|แพ็ค/;
   const groups = {};
   staff.forEach(s => (groups[s.grp || 'อื่นๆ'] = groups[s.grp || 'อื่นๆ'] || []).push(s));
@@ -249,7 +262,8 @@ function openAction(a) {
   const lastUid = store.get('last_' + station + '_' + a, store.get('last_' + station, ''));
   const lastS = staff.find(s => s.uid === lastUid);
   let extra = '';
-  if (a === 'packed') extra = '<h2>จำนวนหีบห่อ</h2><div class="opts" id="pkgOpts">' + PKGS.map(p => '<button>' + p + '</button>').join('') + '</div>' +
+  if (a === 'packed' && simple) extra = '<div class="meta" style="margin-top:8px">📦 แพ็คเสร็จ = จบงานบิลนี้ (โหมดง่าย)</div>';
+  else if (a === 'packed') extra = '<h2>จำนวนหีบห่อ</h2><div class="opts" id="pkgOpts">' + PKGS.map(p => '<button>' + p + '</button>').join('') + '</div>' +
     '<input type="text" id="pkgIn" placeholder="หรือพิมพ์ เช่น 2 กล่อง 1 กระสอบ">';
   if (a === 'ship') {
     const needC = /ขนส่ง|ประจำทาง/.test(current.method || ''), cs = CARRIERS.slice();
@@ -315,7 +329,7 @@ async function submit(a, uid, force, quick) {
 
 // ---------- รายการค้าง ----------
 async function loadBoard() {
-  try { const r = await api({ api: 'board' }); if (r.ok) { board = r.board; slowMin = r.slow || 15; renderBoard(); } } catch (e) {}
+  try { const r = await api({ api: 'board' }); if (r.ok) { board = r.board; slowMin = r.slow || 15; simple = !!r.simple; renderBoard(); } } catch (e) {}
 }
 function renderBoard() {
   const want = station === 'front' ? ['รอจัด', 'จัดผิด', 'ของขาด', 'กำลังจัด'] : ['จัดเสร็จ', 'กำลังจัด', 'แพ็คแล้ว', 'จัดผิด', 'ของขาด'];
@@ -330,19 +344,24 @@ function renderBoard() {
       '</span><span class="chip st-' + esc(b.status) + '">' + esc(b.status) + '</span></button>';
   }).join('') : '<div class="hint">ไม่มีรายการค้าง 🎉</div>';
   // หน้าร้าน: บิลแพ็คแล้ว รอส่งมอบ (ลูกค้ามารับเองขึ้นก่อน)
-  const ready = board.filter(b => b.status === 'แพ็คแล้ว').sort((x, y) => ((y.method === 'รับเอง') - (x.method === 'รับเอง')) || (x.packed || 0) - (y.packed || 0));
+  // + บิลรอรับที่จัดเสร็จแล้วแต่ยังไม่เช็ค (ลูกค้ารีบ หน้าร้านเช็คเองได้)
+  const waitChk = board.filter(b => b.status === 'จัดเสร็จ' && (b.acts || []).includes('front')).sort((x, y) => (x.picked || 0) - (y.picked || 0));
+  const ready = waitChk.concat(board.filter(b => b.status === 'แพ็คแล้ว').sort((x, y) => ((y.method === 'รับเอง') - (x.method === 'รับเอง')) || (x.packed || 0) - (y.packed || 0)));
   $('readyBox').style.display = station === 'front' ? 'block' : 'none';
   $('nextBox').style.display = station === 'front' ? 'block' : 'none';
   $('ready').innerHTML = ready.length ? ready.map(b => '<button class="tile' + (mins(b.packed) >= 30 ? ' old' : '') + '" data-b="' + esc(b.bill) + '"><b>' + esc(b.queue || shortBill(b.bill)) + '</b>' +
-    '<span>' + (b.cust ? esc(b.cust) : (b.type ? b.type.icon + ' ' + esc(b.type.label) : '')) + '</span><span>แพ็ค ' + hm(b.packed) + '</span></button>').join('') : '<div class="hint">ยังไม่มีบิลพร้อมรับ</div>';
+    '<span>' + (b.cust ? esc(b.cust) : (b.type ? b.type.icon + ' ' + esc(b.type.label) : '')) + '</span><span>' + (b.status === 'จัดเสร็จ' ? '🔍 รอเช็ค · จัด ' + hm(b.picked) : 'แพ็ค ' + hm(b.packed)) + '</span></button>').join('') : '<div class="hint">ยังไม่มีบิลพร้อมรับ</div>';
   document.querySelectorAll('#board [data-b], #ready [data-b]').forEach(el => el.onclick = () => { lastCode = ''; onCode(el.dataset.b); window.scrollTo({ top: 0, behavior: 'smooth' }); });
 }
 
 // ---------- เครื่องยิงบลูทูธ: รับการยิงได้ตลอด ไม่ต้องแตะช่องก่อน (iPad) ----------
 let kb = '', kbT = 0;
+document.addEventListener('keyup', e => { if (e.target && e.target.tagName === 'BUTTON' && e.key === ' ') e.preventDefault(); });
+document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('button'); if (b) setTimeout(() => { if (document.activeElement && document.activeElement.tagName === 'BUTTON') document.activeElement.blur(); }, 0); });
 document.addEventListener('keydown', e => {
   const t = e.target;
   if (t && /^(INPUT|TEXTAREA)$/.test(t.tagName)) return;          // กำลังพิมพ์ในช่องอื่นอยู่
+  if (t && t.tagName === 'BUTTON' && (e.key === 'Enter' || e.key === ' ')) e.preventDefault();   // กันเครื่องยิงไปกดปุ่มที่ค้างโฟกัส
   if (e.key === 'Enter') { const v = kb; kb = ''; if (v.length >= 4) { e.preventDefault(); if ($('modal').classList.contains('show')) closeModal(); onCode(v); } return; }
   if (e.key && e.key.length === 1) { if (Date.now() - kbT > 300) kb = ''; kb += e.key; kbT = Date.now(); }
 });

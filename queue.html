@@ -105,7 +105,7 @@ function custShort(n) {
   if (w.length > 1) return w[0] + ' ' + Array.from(w[1])[0] + '.';
   const a = Array.from(n); return a.length > 9 ? a.slice(0, 8).join('') + '…' : n;
 }
-let heavyMin = 10, lunch = null, board = [], slowMin = 15, first = true, seenPacked = {}, seenLate = {}, audio = null, failCount = 0;
+let simple = false, heavyMin = 10, lunch = null, board = [], slowMin = 15, first = true, seenPacked = {}, seenLate = {}, audio = null, failCount = 0;
 
 function lateInfo(b) {
   if (b.heavy && b.status === 'รอจัด') { const m = mins(b.created); if (m !== null && m >= heavyMin) return { late: true, text: '💪 รอคนยกของหนัก ' + m + ' นาที' }; }
@@ -152,7 +152,7 @@ async function load() {
     const res = await fetch(API_URL + '?api=board&key=' + encodeURIComponent(KEY) + '&t=' + Date.now());
     const r = await res.json();
     if (!r.ok) throw new Error(r.err || 'error');
-    board = r.board; slowMin = r.slow || 15; failCount = 0; lunch = r.lunch || null; heavyMin = r.heavyMin || 10;
+    board = r.board; slowMin = r.slow || 15; failCount = 0; lunch = r.lunch || null; simple = !!r.simple; heavyMin = r.heavyMin || 10;
     $('net').textContent = 'อัปเดต ' + hm(Date.now()); $('net').className = '';
     detect(); render(); first = false;
   } catch (e) {
@@ -164,7 +164,7 @@ async function load() {
 // มีอะไรใหม่ตั้งแต่รอบที่แล้ว → เสียง
 function detect() {
   if (VIEW === 'front') {
-    board.filter(b => b.status === 'แพ็คแล้ว').forEach(b => {
+    board.filter(b => b.ready).forEach(b => {
       if (seenPacked[b.bill]) return;
       seenPacked[b.bill] = first ? 1 : Date.now();   // รอบแรก = ของเก่า ไม่กะพริบ/ไม่เรียก
       if (!first && CALL_TYPES.includes(b.type ? b.type.key : 'other')) announce(b);
@@ -202,8 +202,9 @@ function renderBack() {
     { k: 'doing', title: '👷 กำลังจัด', st: ['กำลังจัด'] },
     { k: 'picked', title: '🔍 รอเช็ค', st: ['จัดเสร็จ'] },
     { k: 'packed', title: '📦 แพ็คแล้ว รอส่ง', st: ['แพ็คแล้ว'] },
-  ];
-  if (!$('main').children.length)
+  ].filter(c => !(simple && c.k === 'packed'));   // โหมดง่าย: แพ็คแล้ว = จบงาน ไม่มีคอลัมน์รอส่ง
+  $('main').style.gridTemplateColumns = 'repeat(' + cols.length + ',1fr)';
+  if ($('main').children.length !== cols.length)
     $('main').innerHTML = cols.map(c => '<div class="col"><h2 class="h-' + c.k + '">' + c.title + '<span class="n" id="n-' + c.k + '">0</span></h2><div class="cards" id="c-' + c.k + '"></div></div>').join('');
   cols.forEach(c => {
     const list = sortQ(board.filter(b => c.st.includes(b.status)));
@@ -255,7 +256,7 @@ function renderFront() {
   const tile = (b, isNew) => '<div class="tile' + (isNew ? ' new' : '') + '"><div class="q">' + esc(qn(b)) + '</div><div class="ic">' + (custShort(b.cust) ? esc(custShort(b.cust)) : (b.type ? b.type.icon + ' ' + esc(b.type.label) : '')) + '</div></div>';
   const doing = board.filter(b => ['รอจัด', 'กำลังจัด', 'จัดเสร็จ', 'ของขาด', 'จัดผิด'].includes(b.status))
     .sort((x, y) => (Number(x.queue) || 9999) - (Number(y.queue) || 9999) || (x.created || 0) - (y.created || 0));
-  const ready = board.filter(b => b.status === 'แพ็คแล้ว' && !(b.packed && mins(b.packed) >= READY_HIDE_MIN)).sort((x, y) => (y.packed || 0) - (x.packed || 0));   // แพ็คล่าสุดอยู่บน
+  const ready = board.filter(b => b.ready && !(b.packed && mins(b.packed) >= READY_HIDE_MIN)).sort((x, y) => (y.packed || 0) - (x.packed || 0));   // แพ็คล่าสุดอยู่บน
   const cap = (list, n) => list.slice(0, n);
   $('g-doing').innerHTML = doing.length ? cap(doing, 15).map(b => tile(b)).join('') + (doing.length > 15 ? '<div class="tile"><div class="ic">+ อีก ' + (doing.length - 15) + '</div></div>' : '') : '<div class="empty" style="grid-column:1/-1">—</div>';
   $('g-ready').innerHTML = ready.length ? cap(ready, 12).map(b => tile(b, seenPacked[b.bill] && Date.now() - seenPacked[b.bill] < 60000 && !first)).join('') : '<div class="empty" style="grid-column:1/-1">—</div>';
