@@ -65,11 +65,19 @@
   .warnbox { background:#fef3c7; border:2px solid #f59e0b; border-radius:12px; padding:12px; white-space:pre-line; font-weight:600; }
   button.big.recv { background:var(--ok); }
   .cust { font-size:18px; font-weight:700; margin-top:4px; }
+  .who { border:0; background:#374151; color:#fff; border-radius:10px; padding:8px 10px; font:inherit; font-size:14px; font-weight:600; white-space:nowrap; }
+  button.big.next { background:#1d4ed8; font-size:24px; padding:22px; }
+  button.big.heavy { background:#78350f; }
+  .hv { display:inline-block; background:#fef3c7; color:#78350f; border-radius:8px; padding:2px 8px; font-weight:700; font-size:14px; margin-right:6px; }
+  .toggle { border:2px solid var(--line); background:#fff; border-radius:12px; padding:12px; font:inherit; font-weight:700; width:100%; margin-top:10px; }
+  .toggle.on { border-color:#b45309; background:#fef3c7; color:#78350f; }
+  .goto { text-align:center; padding:6px 0 2px; } .goto b { font-size:72px; line-height:1; display:block; }
 </style>
 </head>
 <body>
 <header>
   <h1>📦 สแกนใบจัด</h1>
+  <button class="who" id="whoBtn">👤</button>
   <div class="seg"><button id="stFront">หน้าร้าน</button><button id="stBack">หลังร้าน</button></div>
 </header>
 <main>
@@ -83,6 +91,9 @@
   </div>
 
   <div class="box" id="card" style="display:none"></div>
+
+  <div class="box" id="nextBox" style="display:none"><button class="big next" id="nextBtn">▶️ รับบิลถัดไป</button>
+    <div class="hint" style="margin-top:6px;text-align:center">ระบบเลือกบิลให้ตามลำดับความด่วน · บิล 💪 ไปหาคนยกของหนักได้</div></div>
 
   <div class="box" id="readyBox" style="display:none"><h2>✅ พร้อมรับสินค้า <span class="hint">แตะเลขคิวตอนส่งของให้ลูกค้า</span></h2><div class="tiles" id="ready"></div></div>
 
@@ -98,7 +109,7 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbwSApgfF0Xwd7N7d7OXpuo1
 const KEY = 'win-pick-2569';   // ต้องตรงกับ PICK_KEY ในโค้ดบอท
 // =====================================
 
-const LABEL = { queue:'📥 ส่งเข้าคิวจัด', front:'🏁 จบที่หน้าร้าน', take:'▶️ รับจัด', picked:'✅ จัดเสร็จ', packed:'📦 แพ็คแล้ว', ship:'🚚 ส่งแล้ว', short:'⚠️ ของขาด', redo:'🔁 จัดผิด' };
+const LABEL = { next:'▶️ รับบิลถัดไป', heavy:'💪 ของหนัก ส่งต่อ', queue:'📥 ส่งเข้าคิวจัด', front:'🏁 จบที่หน้าร้าน', take:'▶️ รับจัด', picked:'✅ จัดเสร็จ', packed:'📦 แพ็คแล้ว', ship:'🚚 ส่งแล้ว', short:'⚠️ ของขาด', redo:'🔁 จัดผิด' };
 const METHODS = ['รถร้าน', 'ขนส่ง', 'รถประจำทาง', 'รับเอง'];
 const CARRIERS = ['KERRY', 'FLASH', 'J&T', 'ไปรษณีย์ไทย', 'SPX', 'เจ้สั้น', 'รถตู้', 'รถบัส', 'อื่นๆ'];
 const PKGS = ['1 กล่อง', '2 กล่อง', '3 กล่อง', '1 ถุง', '1 กระสอบ', '1 มัด'];
@@ -112,7 +123,23 @@ function beep(ok) { try { const a = new (window.AudioContext || window.webkitAud
 function mins(t) { return t ? Math.floor((Date.now() - t) / 60000) : null; }
 function hm(t) { if (!t) return ''; const d = new Date(t); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c])); }
-function tyBadge(b) { const t = b.type; return t ? '<span class="ty ty' + t.lvl + '">' + t.icon + ' ' + esc(t.label) + '</span>' : ''; }
+function tyBadge(b) { const t = b.type; return (b.heavy ? '<span class="hv">💪</span>' : '') + (t ? '<span class="ty ty' + t.lvl + '">' + t.icon + ' ' + esc(t.label) + '</span>' : ''); }
+// ---------- เครื่องนี้ของใคร: 'me:<uid>' = มือถือส่วนตัว (ไม่ต้องแตะชื่อ) · 'shared' = เครื่องกลาง (แตะชื่อทุกครั้ง) ----------
+function myUid() { const d = store.get('dev', ''); return d.indexOf('me:') === 0 ? d.slice(3) : ''; }
+function me() { return staff.find(s => s.uid === myUid()); }
+function renderWho() { const m = me(); $('whoBtn').textContent = m ? '👤 ' + m.name : store.get('dev', '') === 'shared' ? '👥 เครื่องกลาง' : '👤 ตั้งค่า'; }
+function openDevice() {
+  $('sheet').innerHTML = '<div class="row" style="justify-content:space-between"><h2 style="margin:0">เครื่องนี้ใช้ยังไง?</h2><button class="ghost" id="xBtn">✕</button></div>' +
+    '<button class="big" id="devShared" style="margin-top:12px;background:#374151">👥 เครื่องกลาง (หลายคนใช้ · แตะชื่อทุกครั้ง)</button>' +
+    '<h2 style="margin-top:16px">หรือ มือถือของฉัน — ฉันคือ…</h2><div class="names">' +
+    staff.map(s => '<button data-me="' + s.uid + '"' + (s.uid === myUid() ? ' class="last"' : '') + '>' + esc(s.name) + (s.heavy ? ' 💪' : '') + '</button>').join('') + '</div>' +
+    '<div class="hint">มือถือส่วนตัว: กดปุ่มแล้วบันทึกเป็นชื่อนี้ทันที ไม่ต้องแตะชื่อ · ห้ามให้คนอื่นใช้แทน</div>';
+  $('modal').classList.add('show'); $('xBtn').onclick = closeModal;
+  $('devShared').onclick = () => { store.set('dev', 'shared'); renderWho(); closeModal(); toast('ตั้งเป็นเครื่องกลางแล้ว'); };
+  $('sheet').querySelectorAll('[data-me]').forEach(el => el.onclick = () => { store.set('dev', 'me:' + el.dataset.me); renderWho(); closeModal(); toast('เครื่องนี้เป็นของ ' + me().name); });
+}
+$('whoBtn').onclick = () => openDevice();
+let heavyFlag = false;
 // เกินเวลาไหม: ด่วน/ช่าง/ส่งใกล้ = รอเกิน X นาที (ยังไม่แพ็ค) · รถร้าน/ขนส่ง = เลยเวลาที่ต้องแพ็คเสร็จ
 function lateInfo(b) {
   const a = b.alert || {}, done = ['แพ็คแล้ว', 'ส่งแล้ว', 'ยกเลิก'].includes(b.status);
@@ -177,7 +204,9 @@ $('camBtn').onclick = toggleCam;
 // ---------- การ์ดบิล ----------
 function renderCard(b) {
   const late = b.taken && !b.picked && mins(b.taken) >= slowMin, li = lateInfo(b);
-  const order = station === 'front' ? ['queue', 'front', 'take', 'picked', 'short', 'packed'] : ['picked', 'packed', 'ship', 'redo', 'short', 'take'];
+  const order = station !== 'front' ? ['picked', 'packed', 'ship', 'redo', 'short', 'take']
+    : (b.acts || []).includes('queue') ? ['queue', 'front', 'take', 'picked']           // บิลใหม่: พนักงานขายเลือก เข้าคิว / จบหน้าร้าน
+    : ['take', 'picked', 'short', 'packed', 'front', 'heavy'];                          // คนจัด: ปุ่มหลักคือ รับจัด / จัดเสร็จ
   const acts = order.filter(a => (b.acts || []).includes(a));
   if (station === 'front' && (b.acts || []).includes('ship') && !acts.includes('ship')) acts.unshift('ship');
   const pair = acts[0] === 'queue' && acts[1] === 'front';   // หน้าร้าน: 2 ปุ่มใหญ่คู่กัน ให้พนักงานขายเลือก
@@ -198,12 +227,21 @@ function renderCard(b) {
       '<button class="ghost" id="quickOther" style="grid-column:1/-1">เปลี่ยนชื่อคนส่งของ</button></div>' :
      acts.length ? '<div class="acts">' + acts.map((a, i) => '<button class="big ' + a + (a === 'ship' && b.method === 'รับเอง' ? ' recv' : '') + (pair && i < 2 ? ' two' : i === 0 ? ' main' : '') + '" data-a="' + a + '">' + lbl(a, b) + '</button>').join('') + '</div>'
       : '<div class="meta">✅ บิลนี้ปิดแล้ว</div>');
+  if (station === 'front' && (b.acts || []).includes('queue')) {   // ติดป้ายของหนักตอนส่งเข้าคิว
+    heavyFlag = false;
+    const t = document.createElement('button'); t.className = 'toggle'; t.id = 'hvTog'; t.textContent = '💪 บิลนี้มีของหนัก (แตะก่อนกดส่งเข้าคิว)';
+    t.onclick = () => { heavyFlag = !heavyFlag; t.classList.toggle('on', heavyFlag); t.textContent = heavyFlag ? '💪 ของหนัก ✓ (แตะอีกครั้งเพื่อยกเลิก)' : '💪 บิลนี้มีของหนัก (แตะก่อนกดส่งเข้าคิว)'; };
+    $('card').appendChild(t);
+  }
   $('card').querySelectorAll('[data-a]').forEach(el => el.onclick = () => el.dataset.a === 'queue' ? submit('queue', '') : openAction(el.dataset.a));
   if ($('quick')) { $('quick').onclick = () => submit('ship', quickS.uid, false, true); $('quickOther').onclick = () => openAction('ship'); }
 }
 
 // ---------- เลือกชื่อ + ข้อมูลเพิ่ม ----------
 function openAction(a) {
+  const mine = me();
+  const needInput = ['packed', 'short', 'redo'].includes(a) || (a === 'ship' && !(current && current.method === 'รับเอง'));
+  if (mine && !needInput) return submit(a, mine.uid, false, a === 'ship');   // มือถือส่วนตัว: กดแล้วบันทึกเลย
   const prefer = station === 'front' ? /จัด/ : /เช็ค|แพ็ค/;
   const groups = {};
   staff.forEach(s => (groups[s.grp || 'อื่นๆ'] = groups[s.grp || 'อื่นๆ'] || []).push(s));
@@ -224,10 +262,11 @@ function openAction(a) {
   }
   if (a === 'front') extra = '<div class="meta" style="margin-top:8px">🏁 บันทึกว่า <b>คนที่แตะชื่อ</b> จัด เช็ค และส่งมอบลูกค้าเองที่หน้าร้าน บิลนี้ปิดเลย ไม่ต้องผ่านหลังร้าน</div>';
   if (a === 'short' || a === 'redo') extra = '<h2>' + (a === 'short' ? 'ขาดอะไร' : 'ผิดอะไร') + '</h2><input type="text" id="noteIn" placeholder="' + (a === 'short' ? 'รหัส/ชื่อสินค้าที่ขาด' : 'เช่น หยิบผิดรุ่น 10011') + '">';
-  $('sheet').innerHTML = '<div class="row" style="justify-content:space-between"><h2 style="margin:0">' + lbl(a, current) + ' · คิว ' + esc(current.queue || shortBill(current.bill)) + '</h2><button class="ghost" id="xBtn">✕</button></div>' +
-    extra + '<h2 style="margin-top:12px">ใครทำ? (แตะชื่อเพื่อบันทึก)</h2><div class="names">' +
+  $('sheet').innerHTML = '<div class="row" style="justify-content:space-between"><h2 style="margin:0">' + lbl(a, current) + (current ? ' · คิว ' + esc(current.queue || shortBill(current.bill)) : '') + '</h2><button class="ghost" id="xBtn">✕</button></div>' +
+    extra + (mine ? '<button class="big" data-u="' + mine.uid + '" style="margin-top:14px">💾 บันทึก (' + esc(mine.name) + ')</button>' :
+    '<h2 style="margin-top:12px">ใครทำ? (แตะชื่อเพื่อบันทึก)</h2><div class="names">' +
     (lastS ? '<button class="last" data-u="' + lastS.uid + '">⭐ ' + esc(lastS.name) + '</button>' : '') +
-    gNames.map(g => '<div class="g">' + esc(g) + '</div>' + groups[g].map(s => '<button data-u="' + s.uid + '">' + esc(s.name) + '</button>').join('')).join('') + '</div>';
+    gNames.map(g => '<div class="g">' + esc(g) + '</div>' + groups[g].map(s => '<button data-u="' + s.uid + '">' + esc(s.name) + (s.heavy ? ' 💪' : '') + '</button>').join('')).join('') + '</div>');
   $('modal').classList.add('show');
   $('xBtn').onclick = closeModal;
   const pick = (box, inp) => box && box.querySelectorAll('button').forEach(btn => btn.onclick = () => {
@@ -241,7 +280,8 @@ function closeModal() { $('modal').classList.remove('show'); setTimeout(() => $(
 $('modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
 
 async function submit(a, uid, force, quick) {
-  const p = { api: 'act', q: current.code || current.bill, a: a, uid: uid };
+  const p = { api: 'act', q: a === 'next' ? '' : current.code || current.bill, a: a, uid: uid };
+  if (a === 'queue' && heavyFlag) p.heavy = '1';
   if (a === 'packed') p.pkg = ($('pkgIn') || {}).value || '';
   if (a === 'ship' && !quick) {
     const m = document.querySelector('#mOpts .on'); if (!m) return toast('เลือกวิธีส่งก่อน', true);
@@ -252,7 +292,8 @@ async function submit(a, uid, force, quick) {
   if (force) p.force = '1';
   try {
     const r = await api(p);
-    if (!r.ok && r.confirm) { if (confirm(r.err)) return submit(a, uid, true); return; }
+    if (!r.ok && r.confirm) { if (confirm(r.err)) return submit(a, uid, true, quick); return; }
+    if (!r.ok && r.empty) { closeModal(); return toast(r.err); }
     if (!r.ok && r.garbled) { beep(false); closeModal(); return showGarbled(r.err); }
     if (!r.ok) { beep(false); return toast(r.err, true); }
     if (a === 'queue') {
@@ -262,7 +303,12 @@ async function submit(a, uid, force, quick) {
     store.set('last_' + station + '_' + a, uid); store.set('last_' + station, uid);
     const who = (staff.find(s => s.uid === uid) || {}).name || '';
     beep(true); toast(lbl(a, current).replace(/^\S+\s/, '') + ' · คิว ' + (r.bill.queue || shortBill(r.bill.bill)) + ' · ' + who);
-    current = Object.assign(r.bill, { code: current.code }); renderCard(current); closeModal(); loadBoard();
+    current = Object.assign(r.bill, { code: current ? current.code : r.bill.bill }); renderCard(current); closeModal(); loadBoard();
+    if (a === 'next') {   // บอกให้ไปหยิบใบไหน
+      $('card').style.display = 'block';
+      $('card').insertAdjacentHTML('afterbegin', '<div class="goto">ไปหยิบใบจัด<b>คิว ' + esc(r.bill.queue || shortBill(r.bill.bill)) + '</b>' + (r.bill.cust ? esc(r.bill.cust) + ' · ' : '') + esc(r.bill.items ? r.bill.items + ' รายการ' : '') + '</div>');
+      window.scrollTo({ top: 0, behavior: 'smooth' }); return;
+    }
     setTimeout(() => { if (current && current.bill === r.bill.bill) { $('card').style.display = 'none'; current = null; } }, 6000);
   } catch (e) { if (e.message !== 'no url') toast('บันทึกไม่สำเร็จ ลองอีกครั้ง', true); }
 }
@@ -286,6 +332,7 @@ function renderBoard() {
   // หน้าร้าน: บิลแพ็คแล้ว รอส่งมอบ (ลูกค้ามารับเองขึ้นก่อน)
   const ready = board.filter(b => b.status === 'แพ็คแล้ว').sort((x, y) => ((y.method === 'รับเอง') - (x.method === 'รับเอง')) || (x.packed || 0) - (y.packed || 0));
   $('readyBox').style.display = station === 'front' ? 'block' : 'none';
+  $('nextBox').style.display = station === 'front' ? 'block' : 'none';
   $('ready').innerHTML = ready.length ? ready.map(b => '<button class="tile' + (mins(b.packed) >= 30 ? ' old' : '') + '" data-b="' + esc(b.bill) + '"><b>' + esc(b.queue || shortBill(b.bill)) + '</b>' +
     '<span>' + (b.cust ? esc(b.cust) : (b.type ? b.type.icon + ' ' + esc(b.type.label) : '')) + '</span><span>แพ็ค ' + hm(b.packed) + '</span></button>').join('') : '<div class="hint">ยังไม่มีบิลพร้อมรับ</div>';
   document.querySelectorAll('#board [data-b], #ready [data-b]').forEach(el => el.onclick = () => { lastCode = ''; onCode(el.dataset.b); window.scrollTo({ top: 0, behavior: 'smooth' }); });
@@ -301,9 +348,12 @@ document.addEventListener('keydown', e => {
 });
 
 // ---------- เริ่ม ----------
+$('nextBtn').onclick = () => { current = null; openAction('next'); };
+
 (async function init() {
   setStation(station);
   try { const r = await api({ api: 'staff' }); if (r.ok) staff = r.staff; else toast(r.err, true); } catch (e) {}
+  renderWho(); if (!store.get('dev', '') && staff.length) openDevice();   // ครั้งแรก: ถามว่าเครื่องนี้ของใคร
   loadBoard(); setInterval(loadBoard, 20000);
   if (store.get('cam', '') === '1') toggleCam();
   $('manual').focus();

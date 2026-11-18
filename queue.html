@@ -17,6 +17,12 @@
   footer { height:6vh; line-height:6vh; padding:0 2vw; background:#111a2e; font-size:2.3vh; color:#cbd5e1; white-space:nowrap; overflow:hidden; }
   footer b { color:#fff; }
   main { height:85vh; display:grid; gap:1vw; padding:1vw; }
+  body.haslunch main { height:79vh; }
+  #lunch { display:none; height:6vh; line-height:6vh; padding:0 2vw; background:#3b2f0b; color:#fde68a; font-size:2.4vh; white-space:nowrap; overflow:hidden; }
+  body.haslunch #lunch { display:block; }
+  #lunch b { color:#fff; }
+  .card.away { border-left-color:#f59e0b; background:#3b2f0b; }
+  .card.away .s { color:#fde68a; font-weight:700; }
   .col { background:#131c31; border-radius:1vw; display:flex; flex-direction:column; overflow:hidden; }
   .col h2 { font-size:3vh; padding:1.2vh 1vw; display:flex; justify-content:space-between; align-items:center; }
   .col h2 .n { background:rgba(255,255,255,.15); border-radius:99px; padding:0 1.2vw; }
@@ -69,6 +75,7 @@
 </div>
 <header><h1 id="title">จอคิว</h1><span id="net">กำลังเชื่อมต่อ…</span><span id="clock">--:--</span></header>
 <main id="main"></main>
+<div id="lunch"></div>
 <footer id="foot"></footer>
 <div id="call"><div class="a">เชิญรับสินค้า</div><div class="b" id="callQ"></div><div class="c" id="callT"></div></div>
 
@@ -98,9 +105,10 @@ function custShort(n) {
   if (w.length > 1) return w[0] + ' ' + Array.from(w[1])[0] + '.';
   const a = Array.from(n); return a.length > 9 ? a.slice(0, 8).join('') + '…' : n;
 }
-let board = [], slowMin = 15, first = true, seenPacked = {}, seenLate = {}, audio = null, failCount = 0;
+let heavyMin = 10, lunch = null, board = [], slowMin = 15, first = true, seenPacked = {}, seenLate = {}, audio = null, failCount = 0;
 
 function lateInfo(b) {
+  if (b.heavy && b.status === 'รอจัด') { const m = mins(b.created); if (m !== null && m >= heavyMin) return { late: true, text: '💪 รอคนยกของหนัก ' + m + ' นาที' }; }
   const a = b.alert || {}, done = ['แพ็คแล้ว', 'ส่งแล้ว', 'ยกเลิก'].includes(b.status);
   if (a.mode === 'wait') { const m = mins(b.created); return { late: !done && m !== null && m >= a.min, text: done || m === null ? '' : 'รอ ' + m + ' นาที' }; }
   if (a.mode === 'due') return { late: !done && Date.now() >= a.at, soon: !done && Date.now() >= a.at - 30 * 60000, text: done ? '' : 'แพ็คก่อน ' + hm(a.at) };
@@ -144,7 +152,7 @@ async function load() {
     const res = await fetch(API_URL + '?api=board&key=' + encodeURIComponent(KEY) + '&t=' + Date.now());
     const r = await res.json();
     if (!r.ok) throw new Error(r.err || 'error');
-    board = r.board; slowMin = r.slow || 15; failCount = 0;
+    board = r.board; slowMin = r.slow || 15; failCount = 0; lunch = r.lunch || null; heavyMin = r.heavyMin || 10;
     $('net').textContent = 'อัปเดต ' + hm(Date.now()); $('net').className = '';
     detect(); render(); first = false;
   } catch (e) {
@@ -188,6 +196,7 @@ function sortQ(list) {
 }
 
 function renderBack() {
+  renderLunch();
   const cols = [
     { k: 'wait', title: '🔴 รอจัด', st: ['รอจัด', 'ของขาด', 'จัดผิด'] },
     { k: 'doing', title: '👷 กำลังจัด', st: ['กำลังจัด'] },
@@ -204,11 +213,15 @@ function renderBack() {
     el.innerHTML = list.length ? fit(list, el, b => {
       let sub;
       if (c.k === 'wait') sub = (b.status !== 'รอจัด' ? '⚠️ ' + b.status + ' · ' : '') + (b.li.text || ('เข้า ' + hm(b.created)));
-      else if (c.k === 'doing') { const m = mins(b.taken); sub = '👷 ' + (b.picker || '-') + (m !== null ? ' · ' + m + ' นาที' : ''); if (m >= slowMin) b.li.late = true; }
+      else if (c.k === 'doing') {
+        const m = mins(b.taken), away = awayOf(b.picker); b.away = false;
+        if (away) { b.away = true; sub = '👷 ' + (b.picker || '-') + ' 🍱 พักถึง ' + away; }
+        else { sub = '👷 ' + (b.picker || '-') + (m !== null ? ' · ' + m + ' นาที' : ''); if (m >= slowMin) b.li.late = true; }
+      }
       else if (c.k === 'picked') sub = 'จัด: ' + (b.picker || '-') + (b.li.text ? ' · ' + b.li.text : '');
       else sub = '✔️ ' + (b.checker || '-') + (b.pkg ? ' · ' + b.pkg : '') + (b.type && b.type.lvl >= 4 && b.alert && b.alert.note ? ' · ' + b.alert.note : '');
-      return '<div class="card lv' + lv(b) + (b.li.late ? ' late' : b.li.soon ? ' warn' : '') + '"><div class="q">' + esc(qn(b)) + '</div>' +
-        '<div class="t">' + (b.cust ? '👤 ' + esc(b.cust) + ' · ' : '') + (b.type ? b.type.icon + ' ' + esc(b.type.label) : '') + (b.items ? ' · ' + esc(b.items) + ' รายการ' : '') + '</div>' +
+      return '<div class="card lv' + lv(b) + (b.away ? ' away' : b.li.late ? ' late' : b.li.soon ? ' warn' : '') + '"><div class="q">' + esc(qn(b)) + '</div>' +
+        '<div class="t">' + (b.heavy ? '💪 ' : '') + (b.cust ? '👤 ' + esc(b.cust) + ' · ' : '') + (b.type ? b.type.icon + ' ' + esc(b.type.label) : '') + (b.items ? ' · ' + esc(b.items) + ' รายการ' : '') + '</div>' +
         '<div class="s">' + (b.li.late ? '⏰ ' : '') + esc(sub) + '</div></div>';
     }, rowPx) : '<div class="empty">—</div>';
   });
@@ -219,6 +232,20 @@ function renderBack() {
   const late = board.filter(b => b.li && b.li.late).length;
   $('foot').innerHTML = '✅ ส่งแล้ววันนี้ <b>' + done.length + '</b> บิล' + (late ? ' · <b style="color:#f87171">⏰ เกินเวลา ' + late + '</b>' : '') +
     (Object.keys(by).length ? ' · จัดวันนี้: ' + Object.keys(by).sort((a, b) => by[b] - by[a]).map(n => esc(n) + ' <b>' + by[n] + '</b>').join(' · ') : '');
+}
+
+// ---------- พักเที่ยง (จอหลังร้านเท่านั้น) ----------
+function awayOf(name) { const x = lunch && (lunch.on || []).find(o => o.name === name); return x ? x.until : ''; }
+function renderLunch() {
+  const parts = [];
+  if (lunch && lunch.on && lunch.on.length) {
+    const by = {}; lunch.on.forEach(o => (by[o.until] = by[o.until] || []).push(o.name));
+    parts.push('🍱 พักอยู่: ' + Object.keys(by).sort().map(u => '<b>' + by[u].map(esc).join(', ') + '</b> (กลับ ' + u + ')').join(' · '));
+  }
+  if (lunch && lunch.flexWait && lunch.flexWait.length) parts.push('⏳ พักหลังงานเสร็จ ยังไม่เริ่ม: ' + lunch.flexWait.map(esc).join(', '));
+  if (lunch && lunch.next) parts.push('รอบถัดไป ' + lunch.next.t + ': ' + lunch.next.names.map(esc).join(', '));
+  document.body.classList.toggle('haslunch', parts.length > 0);
+  $('lunch').innerHTML = parts.join('  ·  ');
 }
 
 function renderFront() {
