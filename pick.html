@@ -171,9 +171,13 @@ $('stFront').onclick = () => setStation('front');
 $('stBack').onclick = () => setStation('back');
 
 // ---------- สแกน ----------
-async function onCode(code) {
+// src: 'cam' = กล้อง (อ่านภาษาไทยได้ครบ) · 'kb' = เครื่องยิง/พิมพ์ (ภาษาไทยหายหรือมั่ว)
+async function onCode(code, src) {
   code = String(code || '').trim();
   if (!code) return;
+  if (src === 'kb' && /[\u0E00-\u0E7F]/.test(code) && /^[A-Za-z]{1,5}\d/.test(code)) return;   // บรรทัดภาษาไทยมั่วที่เครื่องยิงพิมพ์แยกมา (คีย์บอร์ดไทย) — ไม่ใช่เลขบิล
+  // เครื่องยิง: ช่อง "ขนส่งโดย" ภาษาไทยหายไป (เหลือ "…|84|6|") → ห้ามใช้กับบิลใหม่ ไม่งั้นระบบเข้าใจเป็นบิลปลีก
+  const kbLost = src === 'kb' && code.split('|').length >= 4 && !code.split('|')[3].trim();
   if (code === lastCode && Date.now() - lastAt < 4000) return;   // กันสแกนซ้ำรัวๆ
   lastCode = code; lastAt = Date.now();
   beep(true);
@@ -182,11 +186,12 @@ async function onCode(code) {
     const r = await api({ api: 'bill', q: code });
     if (!r.ok && r.garbled) { beep(false); showGarbled(r.err); return; }
     if (!r.ok) { beep(false); toast(r.err, true); $('card').style.display = 'none'; return; }
+    if (r.isNew && kbLost) { beep(false); showGarbled('⚠️ เครื่องยิงอ่านภาษาไทยในใบจัดไม่ได้ (ประเภทขนส่ง)\nบิลใหม่ให้สแกนครั้งแรกด้วย 📷 กล้อง · ครั้งต่อไปใช้เครื่องยิงได้ตามปกติ'); return; }
     current = Object.assign(r.bill, { code: code, isNew: !!r.isNew });
     renderCard(current);
   } catch (e) { if (e.message !== 'no url') toast('เชื่อมต่อไม่ได้ ตรวจอินเทอร์เน็ต', true); }
 }
-$('manual').addEventListener('keydown', e => { if (e.key === 'Enter') { const v = e.target.value; e.target.value = ''; onCode(v); } });
+$('manual').addEventListener('keydown', e => { if (e.key === 'Enter') { const v = e.target.value; e.target.value = ''; onCode(v, 'kb'); } });
 
 // เครื่องยิงบลูทูธอ่านภาษาไทยไม่ได้ → บิลใหม่ให้ใช้กล้อง
 function showGarbled(msg) {
@@ -199,7 +204,7 @@ async function toggleCam() {
   if (cam) { await cam.stop().catch(() => {}); cam = null; $('camBtn').textContent = '📷 เปิดกล้อง'; $('reader').innerHTML = ''; return; }
   cam = new Html5Qrcode('reader');
   try {
-    await cam.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 240, height: 240 } }, txt => onCode(txt), () => {});
+    await cam.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 240, height: 240 } }, txt => onCode(txt, 'cam'), () => {});
     $('camBtn').textContent = '⏹ ปิดกล้อง'; store.set('cam', '1');
   } catch (e) { cam = null; toast('เปิดกล้องไม่ได้: อนุญาตกล้องในเบราว์เซอร์ก่อน', true); }
 }
@@ -362,7 +367,7 @@ document.addEventListener('keydown', e => {
   const t = e.target;
   if (t && /^(INPUT|TEXTAREA)$/.test(t.tagName)) return;          // กำลังพิมพ์ในช่องอื่นอยู่
   if (t && t.tagName === 'BUTTON' && (e.key === 'Enter' || e.key === ' ')) e.preventDefault();   // กันเครื่องยิงไปกดปุ่มที่ค้างโฟกัส
-  if (e.key === 'Enter') { const v = kb; kb = ''; if (v.length >= 4) { e.preventDefault(); if ($('modal').classList.contains('show')) closeModal(); onCode(v); } return; }
+  if (e.key === 'Enter') { const v = kb; kb = ''; if (v.length >= 4) { e.preventDefault(); if ($('modal').classList.contains('show')) closeModal(); onCode(v, 'kb'); } return; }
   if (e.key && e.key.length === 1) { if (Date.now() - kbT > 300) kb = ''; kb += e.key; kbT = Date.now(); }
 });
 
