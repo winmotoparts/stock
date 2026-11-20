@@ -152,6 +152,8 @@ function lbl(a, b) {
   if (a === 'front' && b && b.picker && ['จัดเสร็จ', 'กำลังจัด'].includes(b.status)) return '✅ เช็คแล้ว ส่งมอบลูกค้า';
   return LABEL[a];
 }
+// เลขที่แสดงแทนเลขคิว: 4 ตัวท้ายของเลขที่บิล (SO6911-003824 → 3824)
+function qLabel(b) { return String((b && b.bill) || '').replace(/\D/g, '').slice(-4); }
 function shortBill(b) { return String(b || '').replace(/^SO\d{4}-0*/, ''); }
 
 async function api(params) {
@@ -225,7 +227,7 @@ function renderCard(b) {
   const quickS = staff.find(s => s.uid === quickUid);
   $('card').innerHTML =
     '<div class="row" style="justify-content:space-between;align-items:flex-start">' +
-      '<div><div class="q">' + esc(b.queue || shortBill(b.bill)) + '</div><div class="bill">' + esc(b.bill) + (b.items ? ' · ' + esc(b.items) + ' รายการ' : '') + '</div>' + (b.cust ? '<div class="cust">👤 ' + esc(b.cust) + '</div>' : '') + '</div>' +
+      '<div><div class="q">' + esc(qLabel(b)) + '</div><div class="bill">' + esc(b.bill) + (b.items ? ' · ' + esc(b.items) + ' รายการ' : '') + '</div>' + (b.cust ? '<div class="cust">👤 ' + esc(b.cust) + '</div>' : '') + '</div>' +
       '<span class="chip st-' + esc(b.status) + '">' + esc(b.status) + '</span></div>' +
     '<div style="margin-top:8px">' + tyBadge(b) + (li.text ? '<span class="' + (li.late ? 'slow' : 'tl') + '">' + (li.late ? '⏰ ' : '') + esc(li.text) + '</span>' : '') + '</div>' +
     '<div class="meta">' +
@@ -246,7 +248,7 @@ function renderCard(b) {
   $('card').querySelectorAll('[data-a]').forEach(el => el.onclick = () => el.dataset.a === 'queue' ? submit('queue', '') : openAction(el.dataset.a));
   if (b.undo) {
     const u = document.createElement('button'); u.className = 'ghost'; u.style.cssText = 'width:100%;margin-top:10px;color:#b91c1c';
-    u.textContent = LABEL.undo; u.onclick = () => { if (confirm('ย้อนคิว ' + (b.queue || shortBill(b.bill)) + ' กลับเป็น "รอจัด"?\n(ล้างชื่อคนจัด/เช็ค/ส่ง ของบิลนี้)')) openAction('undo'); };
+    u.textContent = LABEL.undo; u.onclick = () => { if (confirm('ย้อนบิล ' + (qLabel(b)) + ' กลับเป็น "รอจัด"?\n(ล้างชื่อคนจัด/เช็ค/ส่ง ของบิลนี้)')) openAction('undo'); };
     $('card').appendChild(u);
   }
   if ($('quick')) { $('quick').onclick = () => submit('ship', quickS.uid, false, true); $('quickOther').onclick = () => openAction('ship'); }
@@ -257,7 +259,7 @@ function openAction(a) {
   const mine = me();
   const needInput = ['short', 'redo'].includes(a) || (a === 'packed' && !simple) || (a === 'ship' && !(current && current.method === 'รับเอง'));
   if (mine && !needInput) {   // มือถือส่วนตัว: กดแล้วบันทึกเลย (ขั้นที่ปิดงาน ถามยืนยันก่อน)
-    if (['picked', 'front', 'ship'].includes(a) && !confirm('ยืนยัน: ' + mine.name + ' · ' + lbl(a, current).replace(/^\S+\s/, '') + ' · คิว ' + (current.queue || shortBill(current.bill)) + ' ?')) return;
+    if (['picked', 'front', 'ship'].includes(a) && !confirm('ยืนยัน: ' + mine.name + ' · ' + lbl(a, current).replace(/^\S+\s/, '') + ' · บิล ' + (qLabel(current)) + ' ?')) return;
     return submit(a, mine.uid, false, a === 'ship');
   }
   const prefer = station === 'front' ? /จัด/ : /เช็ค|แพ็ค/;
@@ -281,7 +283,7 @@ function openAction(a) {
   }
   if (a === 'front') extra = '<div class="meta" style="margin-top:8px">🏁 บันทึกว่า <b>คนที่แตะชื่อ</b> จัด เช็ค และส่งมอบลูกค้าเองที่หน้าร้าน บิลนี้ปิดเลย ไม่ต้องผ่านหลังร้าน</div>';
   if (a === 'short' || a === 'redo') extra = '<h2>' + (a === 'short' ? 'ขาดอะไร' : 'ผิดอะไร') + '</h2><input type="text" id="noteIn" placeholder="' + (a === 'short' ? 'รหัส/ชื่อสินค้าที่ขาด' : 'เช่น หยิบผิดรุ่น 10011') + '">';
-  $('sheet').innerHTML = '<div class="row" style="justify-content:space-between"><h2 style="margin:0">' + lbl(a, current) + (current ? ' · คิว ' + esc(current.queue || shortBill(current.bill)) : '') + '</h2><button class="ghost" id="xBtn">✕</button></div>' +
+  $('sheet').innerHTML = '<div class="row" style="justify-content:space-between"><h2 style="margin:0">' + lbl(a, current) + (current ? ' · บิล ' + esc(qLabel(current)) : '') + '</h2><button class="ghost" id="xBtn">✕</button></div>' +
     extra + (mine ? '<button class="big" data-u="' + mine.uid + '" style="margin-top:14px">💾 บันทึก (' + esc(mine.name) + ')</button>' :
     '<h2 style="margin-top:12px">ใครทำ? (แตะชื่อเพื่อบันทึก)</h2><div class="names">' +
     (lastS ? '<button class="last" data-u="' + lastS.uid + '">⭐ ' + esc(lastS.name) + '</button>' : '') +
@@ -298,7 +300,9 @@ function openAction(a) {
 function closeModal() { $('modal').classList.remove('show'); setTimeout(() => $('manual').focus(), 100); }
 $('modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
 
-async function submit(a, uid, force, quick) {
+let busy = false;   // กันกดซ้ำระหว่างรอระบบตอบ (กดรัวทำให้ระบบคิวยาวขึ้น)
+async function submit(a, uid, force, quick, retry) {
+  if (busy && !retry) return toast('กำลังบันทึก… รอสักครู่');
   const p = { api: 'act', q: a === 'next' ? '' : current.code || current.bill, a: a, uid: uid };
   if (a === 'queue' && heavyFlag) p.heavy = '1';
   if (a === 'packed') p.pkg = ($('pkgIn') || {}).value || '';
@@ -309,27 +313,33 @@ async function submit(a, uid, force, quick) {
   }
   if (a === 'short' || a === 'redo') { p.note = ($('noteIn') || {}).value || ''; if (!p.note.trim()) return toast('พิมพ์รายละเอียดก่อน', true); }
   if (force) p.force = '1';
+  busy = true; document.body.style.cursor = 'progress';
   try {
     const r = await api(p);
-    if (!r.ok && r.confirm) { if (confirm(r.err)) return submit(a, uid, true, quick); return; }
+    if (!r.ok && r.busy) {   // คนกดพร้อมกันเยอะ: ลองใหม่เองอีก 1 ครั้ง
+      if (!retry) { toast('⏳ ระบบไม่ว่าง กำลังลองใหม่…'); await new Promise(z => setTimeout(z, 2000)); busy = false; return submit(a, uid, force, quick, true); }
+      beep(false); return toast(r.err, true);
+    }
+    if (!r.ok && r.confirm) { if (confirm(r.err)) { busy = false; return submit(a, uid, true, quick, true); } return; }
     if (!r.ok && r.empty) { closeModal(); return toast(r.err); }
     if (!r.ok && r.garbled) { beep(false); closeModal(); return showGarbled(r.err); }
     if (!r.ok) { beep(false); return toast(r.err, true); }
     if (a === 'queue') {
-      beep(true); toast((r.already ? 'อยู่ในคิวแล้ว' : '📥 เข้าคิวจัดแล้ว') + ' · คิว ' + (r.bill.queue || shortBill(r.bill.bill)) + ' ' + (r.bill.type ? r.bill.type.icon + ' ' + r.bill.type.label : ''));
+      beep(true); toast((r.already ? 'อยู่ในคิวแล้ว' : '📥 เข้าคิวจัดแล้ว') + ' · บิล ' + (qLabel(r.bill)) + ' ' + (r.bill.type ? r.bill.type.icon + ' ' + r.bill.type.label : ''));
       $('card').style.display = 'none'; current = null; loadBoard(); $('manual').focus(); return;
     }
     store.set('last_' + station + '_' + a, uid); store.set('last_' + station, uid);
     const who = (staff.find(s => s.uid === uid) || {}).name || '';
-    beep(true); toast(lbl(a, current).replace(/^\S+\s/, '') + ' · คิว ' + (r.bill.queue || shortBill(r.bill.bill)) + ' · ' + who);
+    beep(true); toast(lbl(a, current).replace(/^\S+\s/, '') + ' · บิล ' + (qLabel(r.bill)) + ' · ' + who);
     current = Object.assign(r.bill, { code: current ? current.code : r.bill.bill }); renderCard(current); closeModal(); loadBoard();
     if (a === 'next') {   // บอกให้ไปหยิบใบไหน
       $('card').style.display = 'block';
-      $('card').insertAdjacentHTML('afterbegin', '<div class="goto">ไปหยิบใบจัด<b>คิว ' + esc(r.bill.queue || shortBill(r.bill.bill)) + '</b>' + (r.bill.cust ? esc(r.bill.cust) + ' · ' : '') + esc(r.bill.items ? r.bill.items + ' รายการ' : '') + '</div>');
+      $('card').insertAdjacentHTML('afterbegin', '<div class="goto">ไปหยิบใบจัด<b>บิล ' + esc(qLabel(r.bill)) + '</b>' + (r.bill.cust ? esc(r.bill.cust) + ' · ' : '') + esc(r.bill.items ? r.bill.items + ' รายการ' : '') + '</div>');
       window.scrollTo({ top: 0, behavior: 'smooth' }); return;
     }
     setTimeout(() => { if (current && current.bill === r.bill.bill) { $('card').style.display = 'none'; current = null; } }, 6000);
   } catch (e) { if (e.message !== 'no url') toast('บันทึกไม่สำเร็จ ลองอีกครั้ง', true); }
+  finally { busy = false; document.body.style.cursor = ''; }
 }
 
 // ---------- รายการค้าง ----------
@@ -344,7 +354,7 @@ function renderBoard() {
     .sort((x, y) => (y.li.late - x.li.late) || lv(x) - lv(y) || (x.created || 0) - (y.created || 0));
   $('board').innerHTML = list.length ? list.map(b => {
     const slow = b.status === 'กำลังจัด' && mins(b.taken) >= slowMin, late = b.li.late || slow;
-    return '<button class="item' + (late ? ' late lv' + lv(b) : '') + '" data-b="' + esc(b.bill) + '"><span><b>' + esc(b.queue || shortBill(b.bill)) + '</b>' + tyBadge(b) + esc(b.picker || '') + (b.cust ? ' <span class="tl">👤 ' + esc(b.cust) + '</span>' : '') +
+    return '<button class="item' + (late ? ' late lv' + lv(b) : '') + '" data-b="' + esc(b.bill) + '"><span><b>' + esc(qLabel(b)) + '</b>' + tyBadge(b) + esc(b.picker || '') + (b.cust ? ' <span class="tl">👤 ' + esc(b.cust) + '</span>' : '') +
       (b.status === 'กำลังจัด' && b.taken ? ' · จัด ' + mins(b.taken) + ' นาที' : '') + (b.li.text ? '<br><span class="tl">' + (b.li.late ? '⏰ ' : '') + esc(b.li.text) + '</span>' : '') +
       '</span><span class="chip st-' + esc(b.status) + '">' + esc(b.status) + '</span></button>';
   }).join('') : '<div class="hint">ไม่มีรายการค้าง 🎉</div>';
@@ -354,7 +364,7 @@ function renderBoard() {
   const ready = waitChk.concat(board.filter(b => b.status === 'แพ็คแล้ว').sort((x, y) => ((y.method === 'รับเอง') - (x.method === 'รับเอง')) || (x.packed || 0) - (y.packed || 0)));
   $('readyBox').style.display = station === 'front' ? 'block' : 'none';
   $('nextBox').style.display = station === 'front' ? 'block' : 'none';
-  $('ready').innerHTML = ready.length ? ready.map(b => '<button class="tile' + (mins(b.packed) >= 30 ? ' old' : '') + '" data-b="' + esc(b.bill) + '"><b>' + esc(b.queue || shortBill(b.bill)) + '</b>' +
+  $('ready').innerHTML = ready.length ? ready.map(b => '<button class="tile' + (mins(b.packed) >= 30 ? ' old' : '') + '" data-b="' + esc(b.bill) + '"><b>' + esc(qLabel(b)) + '</b>' +
     '<span>' + (b.cust ? esc(b.cust) : (b.type ? b.type.icon + ' ' + esc(b.type.label) : '')) + '</span><span>' + (b.status === 'จัดเสร็จ' ? '🔍 รอเช็ค · จัด ' + hm(b.picked) : 'แพ็ค ' + hm(b.packed)) + '</span></button>').join('') : '<div class="hint">ยังไม่มีบิลพร้อมรับ</div>';
   document.querySelectorAll('#board [data-b], #ready [data-b]').forEach(el => el.onclick = () => { lastCode = ''; onCode(el.dataset.b); window.scrollTo({ top: 0, behavior: 'smooth' }); });
 }
