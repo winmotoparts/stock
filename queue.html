@@ -101,6 +101,12 @@ const lv = b => b.type ? b.type.lvl : 9;
 function custShort(n) {
   n = String(n || '').trim(); if (!n || FRONT_NAME === 'none') return '';
   if (FRONT_NAME === 'full') return n;
+  n = n.replace(/\s*\((สำนักงานใหญ่|สาขา[^)]*)\)\s*$/, '').trim();
+  const biz = /^(ร้าน|อู่|บริษัท|บจก\.?|หจก\.?|ห้างหุ้นส่วนจำกัด|ห้างหุ้นส่วน)\s*/;
+  if (biz.test(n)) {   // ลูกค้าร้าน/อู่/บริษัท: ตัดคำนำหน้า แสดงชื่อร้าน (ไม่ใช่ข้อมูลส่วนตัว)
+    const a = Array.from(n.replace(biz, '').trim()); return a.length > 14 ? a.slice(0, 13).join('') + '…' : a.join('');
+  }
+  n = n.replace(/^(คุณ|นาย|นางสาว|นาง|น\.ส\.)\s*/, '');
   const w = n.split(/\s+/);
   if (w.length > 1) return w[0] + ' ' + Array.from(w[1])[0] + '.';
   const a = Array.from(n); return a.length > 9 ? a.slice(0, 8).join('') + '…' : n;
