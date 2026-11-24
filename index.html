@@ -48,7 +48,11 @@
   .modal h3 { margin: 0 0 10px; font-size: 18px; }
   #reader { width: 100%; min-height: 260px; background: #000; border-radius: 10px; overflow: hidden; }
   .stack > button { width: 100%; margin-top: 8px; }
-  .busy { opacity: .6; pointer-events: none; }
+  #busyBox { position: fixed; inset: 0; background: rgba(241,245,249,.55); z-index: 45; display: flex; align-items: center; justify-content: center; }
+  #busyBox .in { background: #0f172a; color: #fff; border-radius: 12px; padding: 14px 18px; display: flex; flex-direction: column; align-items: center; gap: 10px; min-width: 200px; }
+  #busyBox .sp { width: 26px; height: 26px; border: 3px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: spin .8s linear infinite; }
+  #busyBox button { background: #fff; color: #0f172a; padding: 8px 14px; font-size: 15px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
   .home { background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 10px 12px; margin-top: 10px; font-size: 15px; }
   .home b.c { font-family: ui-monospace, Menlo, Consolas, monospace; }
   .home .out { color: #b91c1c; font-weight: 700; }
@@ -164,6 +168,8 @@
   </div>
 </div>
 
+<div id="busyBox" class="hidden"><div class="in"><div class="sp"></div><div id="busyText">กำลังบันทึก…</div><button id="busyCancel" class="hidden">ยกเลิก</button></div></div>
+
 <div id="toast"></div>
 
 <script>
@@ -177,22 +183,45 @@ function store(k, v) { try { if (v === undefined) return localStorage.getItem(k)
 // ลิงก์ Apps Script อยู่ในไฟล์ config.js
 var API_URL = 'https://script.google.com/macros/s/AKfycbzVxl0FE--ZP61y2h15uy389Wcpx3gn3g4ujSJKnZwq0ry82_tEMPEod18tmt6AdQbeTA/exec';
 
+/* S1.4: ตั้งเวลารอสูงสุด ไม่ให้หน้าเว็บค้าง + ลองใหม่อัตโนมัติ 1 ครั้งสำหรับคำสั่งที่อ่านข้อมูลอย่างเดียว */
+var READ_ONLY = { login: 1, lookupItem: 1, getLocation: 1, getSlotInfo: 1 };
+var TIMEOUT_MS = 25000;
+var S_abort = null;
 function call(fn) {
   var args = Array.prototype.slice.call(arguments, 1);
   if (!/^https:\/\/script\.google\.com\/.+\/exec$/.test(API_URL)) return Promise.reject(new Error('ยังไม่ได้ใส่ลิงก์ Apps Script ในไฟล์ config.js'));
-  return fetch(API_URL, {
-    method: 'POST', redirect: 'follow',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ fn: fn, args: args })
-  }).then(function (r) {
-    if (!r.ok) throw new Error('เชื่อมต่อไม่สำเร็จ (' + r.status + ')');
-    return r.json();
-  }).then(function (j) {
-    if (!j.ok) throw new Error(j.error);
-    return j.data;
-  }, function (e) {
-    throw new Error(e && e.message === 'Failed to fetch' ? 'เชื่อมต่อไม่ได้ ตรวจสอบอินเทอร์เน็ต หรือลิงก์ API_URL' : (e.message || String(e)));
-  });
+  var tries = READ_ONLY[fn] ? 2 : 1;
+  function once(n) {
+    var ctl = window.AbortController ? new AbortController() : null;
+    S_abort = ctl;
+    var timedOut = false;
+    var timer = setTimeout(function () { timedOut = true; if (ctl) ctl.abort(); }, TIMEOUT_MS);
+    return fetch(API_URL, {
+      method: 'POST', redirect: 'follow', signal: ctl ? ctl.signal : undefined,
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ fn: fn, args: args })
+    }).then(function (r) {
+      if (!r.ok) throw new Error('เชื่อมต่อไม่สำเร็จ (' + r.status + ')');
+      return r.json();
+    }).then(function (j) {
+      clearTimeout(timer);
+      if (!j.ok) { var e = new Error(j.error); e.server = true; throw e; }
+      return j.data;
+    }, function (e) {
+      clearTimeout(timer);
+      var net = new Error(timedOut ? 'ระบบตอบช้าเกินไป (เกิน ' + Math.round(TIMEOUT_MS / 1000) + ' วินาที)'
+        : (e && e.name === 'AbortError') ? 'ยกเลิกแล้ว'
+        : (e && e.message === 'Failed to fetch') ? 'เชื่อมต่อไม่ได้ ตรวจสอบอินเทอร์เน็ต' : (e.message || String(e)));
+      var userAbort = e && e.name === 'AbortError' && !timedOut;
+      net.uncertain = !READ_ONLY[fn];
+      net.retry = n > 1 && !userAbort;
+      throw net;
+    });
+  }
+  function go(n) {
+    return once(n).catch(function (e) { if (!e.server && e.retry) return go(n - 1); throw e; });
+  }
+  return go(tries);
 }
 
 function toast(msg, kind) {
@@ -201,7 +230,27 @@ function toast(msg, kind) {
   clearTimeout(toast._t); toast._t = setTimeout(function () { t.className = ''; }, kind === 'err' ? 3500 : 1800);
 }
 function buzz(ms) { try { navigator.vibrate && navigator.vibrate(ms || 60); } catch (e) {} }
-function busy(on) { document.body.classList.toggle('busy', !!on); }
+var busyTimer = null;
+function busy(on, label) {
+  clearTimeout(busyTimer);
+  $('busyCancel').classList.add('hidden');
+  $('busyText').textContent = label || 'กำลังบันทึก…';
+  $('busyBox').classList.toggle('hidden', !on);
+  if (on) busyTimer = setTimeout(function () {
+    $('busyText').textContent = 'ระบบตอบช้า กำลังรอ…';
+    $('busyCancel').classList.remove('hidden');
+  }, 8000);
+}
+/** หลังบันทึกไม่สำเร็จเพราะเน็ต/ช้า: โหลดรายการใหม่ เพื่อดูว่าบันทึกเข้าไปแล้วหรือยัง */
+function afterUncertain(e) {
+  if (e && e.uncertain && S.loc) {
+    toast(errMsg(e) + ' — ตรวจดูรายการด้านล่างก่อนบันทึกซ้ำ', 'err');
+    setTimeout(loadList, 600);
+    return true;
+  }
+  return false;
+}
+$('busyCancel').onclick = function () { if (S_abort) S_abort.abort(); };
 function errMsg(e) { return (e && e.message ? e.message : String(e)).replace(/^Exception:\s*/, ''); }
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 
@@ -213,7 +262,7 @@ function showLogin() {
   setTimeout(function () { ($('inWho').value ? $('inPin') : $('inWho')).focus(); }, 50);
 }
 function doLogin(who, pin, silent) {
-  busy(true);
+  busy(true, 'กำลังเข้าระบบ…');
   return call('login', pin).then(function (r) {
     S.who = who; S.pin = pin;
     store('sc_who', who); store('sc_pin', pin);
@@ -379,9 +428,10 @@ function save(replace, qtyOverride) {
         return;
       }
       buzz(); toast('บันทึกแล้ว ' + code + ' = ' + qty + ' ชิ้น', 'good');
-      renderList(r.list); clearItem(); refreshHome();
+      renderList(r.list); clearItem();
+      if ($('homeBox').classList.contains('hidden')) refreshHome();
     })
-    .catch(function (e) { toast(errMsg(e), 'err'); })
+    .catch(function (e) { if (!afterUncertain(e)) toast(errMsg(e), 'err'); })
     .then(function () { busy(false); });
 }
 $('btnSave').onclick = function () { save(false); };
@@ -398,7 +448,7 @@ $('btnEmpty').onclick = function () {
   busy(true);
   call('markEmpty', S.pin, S.who, S.loc).then(function (r) {
     buzz(); toast(r.zeroed ? 'บันทึกของหมด ' + r.zeroed + ' รายการ' : 'บันทึกว่า ' + S.loc + ' ว่าง', 'good'); renderList(r.list); refreshHome();
-  }).catch(function (e) { toast(errMsg(e), 'err'); }).then(function () { busy(false); });
+  }).catch(function (e) { if (!afterUncertain(e)) toast(errMsg(e), 'err'); }).then(function () { busy(false); });
 };
 
 function renderList(rows) {
@@ -417,34 +467,51 @@ function renderList(rows) {
       if (!confirm('ลบรายการ ' + r.code + ' (' + r.qty + ' ชิ้น)?\n\n⚠ ถ้าของหมด ไม่ต้องลบ ให้บันทึก 0 หรือกด "ของหมด / ช่องว่าง" แทน\nลบเฉพาะกรณีสแกนผิด หรือสินค้าย้ายออกจากช่องนี้ถาวร')) return;
       busy(true);
       call('deleteCount', S.pin, r.id, S.loc).then(function (rows) { renderList(rows); toast('ลบแล้ว'); refreshHome(); })
-        .catch(function (e) { toast(errMsg(e), 'err'); }).then(function () { busy(false); });
+        .catch(function (e) { if (!afterUncertain(e)) toast(errMsg(e), 'err'); }).then(function () { busy(false); });
     };
     li.appendChild(b); ul.appendChild(li);
   });
 }
 
 /* ---------- สแกนด้วยกล้อง ---------- */
-var scanner = null, scanTarget = null;
+/* S1.4: ใช้ตัวสแกนตัวเดียว กันเปิดกล้องซ้อน และปิดกล้องเมื่อสลับแอป */
+var scanner = null, scanTarget = null, scanState = 'idle';
 function openScan(target) {
   if (typeof Html5Qrcode === 'undefined') { toast('โหลดตัวสแกนไม่สำเร็จ ให้พิมพ์รหัสแทน', 'err'); return; }
-  scanTarget = target;
+  if (scanState !== 'idle') return;
+  scanTarget = target; scanState = 'starting';
   $('scanTitle').textContent = target === 'code' ? 'สแกนบาร์โค้ดสินค้า' : (target === 'look' ? 'ดูช่อง: สแกน QR ที่สติ๊กเกอร์ช่อง' : 'สแกน QR ที่สติ๊กเกอร์ช่อง');
   $('scanHint').textContent = 'เล็งกล้องไปที่ QR / บาร์โค้ด';
   $('scanModal').classList.remove('hidden');
-  var F = Html5QrcodeSupportedFormats;
-  scanner = new Html5Qrcode('reader', {
-    formatsToSupport: [F.QR_CODE, F.CODE_128, F.CODE_39, F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.ITF, F.CODABAR],
-    experimentalFeatures: { useBarCodeDetectorIfSupported: true }, verbose: false
-  });
-  scanner.start({ facingMode: 'environment' }, { fps: 12, qrbox: function (w, h) { return { width: Math.floor(w * 0.85), height: Math.floor(Math.min(h, w) * 0.55) }; } },
-    function (text) { onScanned(text); }, function () {})
-    .catch(function (e) {
-      $('scanHint').textContent = 'เปิดกล้องไม่ได้: ' + errMsg(e) + ' — ลองเปิดหน้านี้ใน Chrome/Safari แล้วอนุญาตกล้อง หรือพิมพ์รหัสแทน';
+  if (!scanner) {
+    var F = Html5QrcodeSupportedFormats;
+    scanner = new Html5Qrcode('reader', {
+      formatsToSupport: [F.QR_CODE, F.CODE_128, F.CODE_39, F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.ITF, F.CODABAR],
+      experimentalFeatures: { useBarCodeDetectorIfSupported: true }, verbose: false
     });
+  }
+  scanner.start({ facingMode: 'environment' }, { fps: 10, qrbox: function (w, h) { return { width: Math.floor(w * 0.85), height: Math.floor(Math.min(h, w) * 0.55) }; } },
+    function (text) { if (scanState === 'running') onScanned(text); }, function () {})
+    .then(function () {
+      if (scanState === 'starting') scanState = 'running';
+      else stopScanner(); // กดปิดระหว่างกำลังเปิดกล้อง
+    })
+    .catch(function (e) {
+      scanState = 'idle';
+      $('scanHint').textContent = 'เปิดกล้องไม่ได้: ' + errMsg(e) + ' — ลองปิดแล้วเปิดใหม่ หรือพิมพ์รหัสแทน';
+    });
+}
+function stopScanner() {
+  if (!scanner) { scanState = 'idle'; return Promise.resolve(); }
+  scanState = 'stopping';
+  var p;
+  try { p = scanner.isScanning ? scanner.stop() : Promise.resolve(); } catch (e) { p = Promise.resolve(); }
+  return p.catch(function () {}).then(function () { scanState = 'idle'; });
 }
 function closeScan() {
   $('scanModal').classList.add('hidden');
-  if (scanner) { var s = scanner; scanner = null; s.stop().catch(function () {}).then(function () { try { s.clear(); } catch (e) {} }); }
+  if (scanState === 'starting') { scanState = 'cancel'; return; }
+  if (scanState === 'running') stopScanner();
 }
 function onScanned(text) {
   var t = scanTarget; closeScan(); buzz(80);
@@ -452,6 +519,7 @@ function onScanned(text) {
   else if (t === 'look') showSlot(text);
   else lookup(text, true);
 }
+document.addEventListener('visibilitychange', function () { if (document.hidden) closeScan(); });
 $('btnScanLoc').onclick = function () { openScan('loc'); };
 $('btnScanCode').onclick = function () { openScan('code'); };
 $('btnScanCancel').onclick = closeScan;
