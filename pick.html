@@ -83,6 +83,11 @@
 <main>
   <div class="box">
     <div id="reader"></div>
+    <div class="row" id="camTools" style="display:none;margin-top:8px;flex-wrap:wrap">
+      <button class="ghost" id="zoomBtn" style="display:none">🔍 ซูม 1x</button>
+      <button class="ghost" id="torchBtn" style="display:none">🔦 ไฟฉาย</button>
+      <span class="hint">ถือห่าง 15–20 ซม. ให้ QR เต็มกรอบ ถือนิ่ง 1–2 วินาที</span>
+    </div>
     <div class="row" style="margin-top:10px">
       <button class="ghost" id="camBtn">📷 เปิดกล้อง</button>
       <input type="text" id="manual" placeholder="ยิงบาร์โค้ด / พิมพ์ท้ายเลขบิล แล้วกด Enter" autocomplete="off" inputmode="search">
@@ -202,14 +207,45 @@ function showGarbled(msg) {
   if ($('gCam')) $('gCam').onclick = () => { toggleCam(); window.scrollTo({ top: 0, behavior: 'smooth' }); };
   lastCode = '';
 }
+// กล้อง (v10.8.3): QR ใบจัดแน่นขึ้นหลังเพิ่มชื่อลูกค้า → ความละเอียดสูง + โฟกัสต่อเนื่อง + อ่านทั้งภาพ + ตัวอ่าน QR ในเครื่อง (Android) + ซูม/ไฟฉาย
+let camZoom = 1, camTorch = false, camCaps = {};
 async function toggleCam() {
-  if (cam) { await cam.stop().catch(() => {}); cam = null; $('camBtn').textContent = '📷 เปิดกล้อง'; $('reader').innerHTML = ''; return; }
-  cam = new Html5Qrcode('reader');
+  if (cam) { await cam.stop().catch(() => {}); cam = null; $('camBtn').textContent = '📷 เปิดกล้อง'; $('reader').innerHTML = ''; $('camTools').style.display = 'none'; return; }
+  const opts = { verbose: false, experimentalFeatures: { useBarCodeDetectorIfSupported: true } };
+  try { if (window.Html5QrcodeSupportedFormats) opts.formatsToSupport = [Html5QrcodeSupportedFormats.QR_CODE]; } catch (e) {}
+  cam = new Html5Qrcode('reader', opts);
+  const cfg = {
+    fps: 15,
+    // ไม่กำหนด qrbox = อ่านทั้งภาพ (ทดสอบแล้วอ่าน QR แน่นได้ดีกว่ากรอบ)
+    disableFlip: true,
+    videoConstraints: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 }, advanced: [{ focusMode: 'continuous' }] },
+  };
   try {
-    await cam.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 240, height: 240 } }, txt => onCode(txt, 'cam'), () => {});
+    try { await cam.start({ facingMode: 'environment' }, cfg, txt => onCode(txt, 'cam'), () => {}); }
+    catch (e1) {   // บางเครื่องไม่รับค่าความละเอียดสูง → ลองแบบพื้นฐาน
+      delete cfg.videoConstraints; await cam.start({ facingMode: 'environment' }, cfg, txt => onCode(txt, 'cam'), () => {});
+    }
     $('camBtn').textContent = '⏹ ปิดกล้อง'; store.set('cam', '1');
+    camZoom = 1; camTorch = false; camCaps = {};
+    try { camCaps = cam.getRunningTrackCapabilities() || {}; } catch (e) {}
+    $('camTools').style.display = 'flex';
+    $('zoomBtn').style.display = camCaps.zoom ? '' : 'none';
+    $('torchBtn').style.display = camCaps.torch ? '' : 'none';
+    $('zoomBtn').textContent = '🔍 ซูม 1x'; $('torchBtn').textContent = '🔦 ไฟฉาย';
   } catch (e) { cam = null; toast('เปิดกล้องไม่ได้: อนุญาตกล้องในเบราว์เซอร์ก่อน', true); }
 }
+// ซูม: 1x → 2x → 3x (เท่าที่กล้องรองรับ) — QR เล็กหรือแน่น ซูม 2x แล้วถือห่างขึ้น อ่านง่ายกว่าจ่อใกล้
+$('zoomBtn').onclick = async () => {
+  if (!cam || !camCaps.zoom) return;
+  const max = camCaps.zoom.max || 1, min = camCaps.zoom.min || 1;
+  camZoom = camZoom >= Math.min(3, max) ? min : Math.min(camZoom + 1, max);
+  try { await cam.applyVideoConstraints({ advanced: [{ zoom: camZoom }] }); $('zoomBtn').textContent = '🔍 ซูม ' + camZoom + 'x'; } catch (e) { toast('ซูมไม่ได้บนเครื่องนี้', true); }
+};
+$('torchBtn').onclick = async () => {
+  if (!cam || !camCaps.torch) return;
+  camTorch = !camTorch;
+  try { await cam.applyVideoConstraints({ advanced: [{ torch: camTorch }] }); $('torchBtn').textContent = camTorch ? '🔦 ปิดไฟ' : '🔦 ไฟฉาย'; } catch (e) { toast('เปิดไฟฉายไม่ได้บนเครื่องนี้', true); }
+};
 $('camBtn').onclick = toggleCam;
 
 // ---------- การ์ดบิล ----------
